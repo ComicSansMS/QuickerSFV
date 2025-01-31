@@ -10,7 +10,7 @@
 *.hpp text
 *.txt text
 *.svg text
-*.rc text
+*.rc text text eol=lf
 
 # Declare files that will always have CRLF line endings on checkout.
 *.sln text eol=crlf
