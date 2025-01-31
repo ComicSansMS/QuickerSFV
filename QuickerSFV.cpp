@@ -22,6 +22,7 @@
 #   define NOMINMAX
 #endif
 #include <Windows.h>
+#include <windowsx.h>
 #include <CommCtrl.h>
 #include <uxtheme.h>
 #include <tchar.h>
@@ -161,7 +162,7 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
     WORD const cyChar = HIWORD(GetDialogBaseUnits());
     m_hTextField = CreateWindow(TEXT("STATIC"),
         TEXT("Testtext"),
-        WS_CHILD | SS_LEFT | WS_VISIBLE,
+        WS_CHILD | SS_LEFT | WS_VISIBLE | SS_SUNKEN,
         0,
         0,
         parent_rect.right - parent_rect.left,
@@ -175,6 +176,7 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
         MessageBox(nullptr, TEXT("Error creating window ui element"), m_windowTitle, MB_ICONERROR);
         return -1;
     }
+    Static_SetText(m_hTextField, TEXT("Completed files: 0/0  Bad: 0\nOk: 0              Missing: 0"));
 
     m_hListView = CreateWindowEx(WS_EX_CLIENTEDGE,
         WC_LISTVIEW,
@@ -213,6 +215,8 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
 
     ListView_DeleteAllItems(m_hListView);
     ListView_SetItemCount(m_hListView, 5);
+
+    SetWindowFont(m_hTextField, GetWindowFont(m_hListView), TRUE);
 
     return 0;
 }
