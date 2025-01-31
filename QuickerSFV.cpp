@@ -41,7 +41,8 @@ private:
     HINSTANCE m_hInstance;
     TCHAR const* m_windowTitle;
     HWND m_hWnd;
-    HWND m_hTextField;
+    HWND m_hTextFieldLeft;
+    HWND m_hTextFieldRight;
     HWND m_hListView;
     struct ListViewEntry {
         std::unique_ptr<TCHAR[]> name;
@@ -52,17 +53,29 @@ private:
 private:
     explicit MainWindow(HINSTANCE hInstance);
 public:
-    static std::optional<MainWindow> createMainWindow(HINSTANCE hInstance, int nCmdShow,
-                                                      TCHAR const* class_name, TCHAR const* window_title);
+    MainWindow();
+
+    MainWindow(MainWindow const&) = delete;
+    MainWindow(MainWindow&&) = delete;
+    MainWindow& operator=(MainWindow const&) = delete;
+    MainWindow& operator=(MainWindow&&) = delete;
+
+    BOOL createMainWindow(HINSTANCE hInstance, int nCmdShow,
+                          TCHAR const* class_name, TCHAR const* window_title);
 
     LRESULT WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 private:
     LRESULT createUiElements(HWND parent_hwnd);
+
+    LRESULT populateListView(NMHDR* nmh);
+
+    void resize();
 };
 
-MainWindow::MainWindow(HINSTANCE hInstance)
-    :m_hInstance(hInstance), m_hWnd(nullptr), m_windowTitle(nullptr)
+MainWindow::MainWindow()
+    :m_hInstance(nullptr), m_windowTitle(nullptr), m_hWnd(nullptr), m_hTextFieldLeft(nullptr), m_hTextFieldRight(nullptr),
+     m_hListView(nullptr)
 {
 }
 
@@ -86,46 +99,61 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     } else if (msg == WM_NOTIFY) {
         NMHDR* nmh = std::bit_cast<LPNMHDR>(lParam);
         if (nmh->hwndFrom == m_hListView) {
-            if (nmh->code == LVN_GETDISPINFO) {
-                NMLVDISPINFO* disp_info = std::bit_cast<NMLVDISPINFO*>(lParam);
-                if (disp_info->item.iSubItem == 0) {
-                    // name
-                    if (disp_info->item.pszText) {
-                        TCHAR const test[] = TEXT("Name");
-                        _tcsncpy_s(disp_info->item.pszText, disp_info->item.cchTextMax,
-                                   test, _TRUNCATE);
-                    }
-                } else if (disp_info->item.iSubItem == 1) {
-                    // crc
-                    TCHAR const test[] = TEXT("Lorem ipsum");
-                    _tcsncpy_s(disp_info->item.pszText, disp_info->item.cchTextMax,
-                               test, _TRUNCATE);
-                } else if (disp_info->item.iSubItem == 2) {
-                    // status
-                    TCHAR const test[] = TEXT("Lorem ipsum2");
-                    _tcsncpy_s(disp_info->item.pszText, disp_info->item.cchTextMax,
-                               test, _TRUNCATE);
-                }
-            }
+            return populateListView(nmh);
         }
+    } else if (msg == WM_SIZE) {
+        resize();
+        return 0;
     }
     return DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
-std::optional<MainWindow> MainWindow::createMainWindow(HINSTANCE hInstance, int nCmdShow,
-                                                       TCHAR const* class_name, TCHAR const* window_title)
+LRESULT MainWindow::populateListView(NMHDR* nmh) {
+    if (nmh->code == LVN_GETDISPINFO) {
+        NMLVDISPINFO* disp_info = std::bit_cast<NMLVDISPINFO*>(nmh);
+        if (disp_info->item.mask & LVIF_TEXT) {
+            // name
+            if (disp_info->item.iSubItem == 0) {
+                TCHAR const test[] = TEXT("Name");
+                _tcsncpy_s(disp_info->item.pszText, disp_info->item.cchTextMax,
+                    test, _TRUNCATE);
+            } else if (disp_info->item.iSubItem == 1) {
+                // crc
+                TCHAR const test[] = TEXT("Lorem ipsum");
+                _tcsncpy_s(disp_info->item.pszText, disp_info->item.cchTextMax,
+                    test, _TRUNCATE);
+            } else if (disp_info->item.iSubItem == 2) {
+                // status
+                TCHAR const test[] = TEXT("Lorem ipsum2");
+                _tcsncpy_s(disp_info->item.pszText, disp_info->item.cchTextMax,
+                    test, _TRUNCATE);
+            }
+        } else if (disp_info->item.mask & LVIF_IMAGE) {
+            // @todo
+        }
+    } else if (nmh->code == LVN_ODCACHEHINT) {
+        // @todo
+    } else if (nmh->code == LVN_ODFINDITEM) {
+        // @todo
+    }
+    return 0;
+}
+
+BOOL MainWindow::createMainWindow(HINSTANCE hInstance, int nCmdShow,
+                                  TCHAR const* class_name, TCHAR const* window_title)
 {
+    m_hInstance = hInstance;
+    m_windowTitle = window_title;
     HMENU hMenu = LoadMenu(hInstance, MAKEINTRESOURCE(IDR_MENU1));
     if (!hMenu) {
         MessageBox(nullptr, TEXT("Error creating menu"), window_title, MB_ICONERROR);
-        return std::nullopt;
+        return FALSE;
     }
 
-    MainWindow ret{ hInstance };
     static_assert((sizeof(MainWindow*) == sizeof(LPARAM)) && (sizeof(MainWindow*) == sizeof(LPVOID)));
-    ret.m_hWnd = CreateWindow(
+    m_hWnd = CreateWindow(
         class_name,
-        window_title,
+        m_windowTitle,
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
@@ -134,23 +162,23 @@ std::optional<MainWindow> MainWindow::createMainWindow(HINSTANCE hInstance, int 
         nullptr,
         hMenu,
         hInstance,
-        std::bit_cast<LPVOID>(&ret)
+        std::bit_cast<LPVOID>(this)
     );
-    if (!ret.m_hWnd) {
-        MessageBox(nullptr, TEXT("Error creating main window"), window_title, MB_ICONERROR);
+    if (!m_hWnd) {
+        MessageBox(nullptr, TEXT("Error creating main window"), m_windowTitle, MB_ICONERROR);
         DestroyMenu(hMenu);
-        return std::nullopt;
+        return FALSE;
     }
 
-    SetWindowLongPtr(ret.m_hWnd, 0, std::bit_cast<LONG_PTR>(&ret));
+    SetWindowLongPtr(m_hWnd, 0, std::bit_cast<LONG_PTR>(this));
 
-    ShowWindow(ret.m_hWnd, nCmdShow);
-    if (!UpdateWindow(ret.m_hWnd)) {
-        MessageBox(nullptr, TEXT("Error updating main window"), window_title, MB_ICONERROR);
-        return std::nullopt;
+    ShowWindow(m_hWnd, nCmdShow);
+    if (!UpdateWindow(m_hWnd)) {
+        MessageBox(nullptr, TEXT("Error updating main window"), m_windowTitle, MB_ICONERROR);
+        return FALSE;
     }
 
-    return ret;
+    return TRUE;
 }
 
 LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
@@ -160,23 +188,40 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
         return -1;
     }
     WORD const cyChar = HIWORD(GetDialogBaseUnits());
-    m_hTextField = CreateWindow(TEXT("STATIC"),
-        TEXT("Testtext"),
+    m_hTextFieldLeft = CreateWindow(TEXT("STATIC"),
+        TEXT(""),
         WS_CHILD | SS_LEFT | WS_VISIBLE | SS_SUNKEN,
         0,
         0,
-        parent_rect.right - parent_rect.left,
+        (parent_rect.right - parent_rect.left) / 2,
         cyChar * 2,
         parent_hwnd,
         std::bit_cast<HMENU>(0x123ull),
         m_hInstance,
         0
     );
-    if (!m_hTextField) {
+    if (!m_hTextFieldLeft) {
         MessageBox(nullptr, TEXT("Error creating window ui element"), m_windowTitle, MB_ICONERROR);
         return -1;
     }
-    Static_SetText(m_hTextField, TEXT("Completed files: 0/0  Bad: 0\nOk: 0              Missing: 0"));
+    Static_SetText(m_hTextFieldLeft, TEXT("Completed files: 0/0\nOk: 0"));
+    m_hTextFieldRight = CreateWindow(TEXT("STATIC"),
+        TEXT(""),
+        WS_CHILD | SS_LEFT | WS_VISIBLE | SS_SUNKEN,
+        (parent_rect.right - parent_rect.left) / 2,
+        0,
+        (parent_rect.right - parent_rect.left) / 2,
+        cyChar * 2,
+        parent_hwnd,
+        std::bit_cast<HMENU>(0x124ull),
+        m_hInstance,
+        0
+    );
+    if (!m_hTextFieldRight) {
+        MessageBox(nullptr, TEXT("Error creating window ui element"), m_windowTitle, MB_ICONERROR);
+        return -1;
+    }
+    Static_SetText(m_hTextFieldRight, TEXT("Bad: 0\nMissing: 0"));
 
     m_hListView = CreateWindowEx(WS_EX_CLIENTEDGE,
         WC_LISTVIEW,
@@ -187,7 +232,7 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
         parent_rect.right - parent_rect.left,
         parent_rect.bottom - cyChar * 2,
         parent_hwnd,
-        std::bit_cast<HMENU>(0x124ull),
+        std::bit_cast<HMENU>(0x125ull),
         m_hInstance,
         0
     );
@@ -216,9 +261,20 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
     ListView_DeleteAllItems(m_hListView);
     ListView_SetItemCount(m_hListView, 5);
 
-    SetWindowFont(m_hTextField, GetWindowFont(m_hListView), TRUE);
+    SetWindowFont(m_hTextFieldLeft, GetWindowFont(m_hListView), TRUE);
+    SetWindowFont(m_hTextFieldRight, GetWindowFont(m_hListView), TRUE);
 
     return 0;
+}
+
+void MainWindow::resize() {
+    RECT rect;
+    GetClientRect(m_hWnd, &rect);
+    LONG const new_width = rect.right - rect.left;
+    WORD const textFieldHeight = HIWORD(GetDialogBaseUnits()) * 2;
+    MoveWindow(m_hTextFieldLeft, 0, 0, new_width / 2, textFieldHeight, TRUE);
+    MoveWindow(m_hTextFieldRight, new_width / 2, 0, new_width / 2, textFieldHeight, TRUE);
+    MoveWindow(m_hListView, 0, textFieldHeight, new_width, rect.bottom - textFieldHeight, TRUE);
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -262,8 +318,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
         return 0;
     }
 
-    std::optional<MainWindow> opt_main_window = MainWindow::createMainWindow(hInstance, nCmdShow, class_name, window_title);
-    if (!opt_main_window) {
+    MainWindow main_window;
+    if (!main_window.createMainWindow(hInstance, nCmdShow, class_name, window_title)) {
         return 0;
     }
 
