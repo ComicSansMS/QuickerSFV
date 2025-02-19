@@ -19,11 +19,15 @@ private:
 public:
     SfvFile() = default;
 
-    SfvFile(std::filesystem::path file);
+    SfvFile(std::filesystem::path filename);
 
     std::span<const Entry> getEntries() const;
 
     std::filesystem::path getBasePath() const;
+
+    void serialize(std::filesystem::path out_filename) const;
+
+    void addEntry(std::filesystem::path p, MD5Digest md5);
 };
 
 #endif

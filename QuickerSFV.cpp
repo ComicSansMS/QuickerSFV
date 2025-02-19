@@ -35,10 +35,12 @@
 
 #include <resource.h>
 
-#include <cstring>
+#include <algorithm>
 #include <bit>
-#include <optional>
+#include <cstring>
+#include <generator>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -100,23 +102,46 @@ public:
     AdviseGuard& operator=(AdviseGuard const&) = delete;
 };
 
-class U16String {
+class U16Path {
 private:
-    size_t m_len;
-    std::unique_ptr<WCHAR[]> m_str;
+    std::vector<WCHAR> m_path;
 public:
-    explicit U16String(LPCWSTR zero_terminated_string)
-        :m_len(wcslen(zero_terminated_string) + 1), m_str(std::make_unique<WCHAR[]>(m_len))
+    explicit U16Path(LPCWSTR zero_terminated_string)
     {
-        wmemcpy_s(m_str.get(), m_len, zero_terminated_string, m_len);
+        auto const len = wcslen(zero_terminated_string);
+        m_path.assign(zero_terminated_string, zero_terminated_string + len);
+        m_path.push_back(L'\0');
+        
     }
 
     LPCWSTR str() const noexcept {
-        return m_str.get();
+        return m_path.data();
+    }
+
+    void prependAbsolutePathToRemoveMaxPathLimit() {
+        if ((m_path.size() < 4) || (m_path[0] != L'\\') || (m_path[1] != L'\\')) {
+            m_path.insert(m_path.begin(), { L'\\', L'\\', L'?', L'\\' });
+        }
+    }
+
+    void append(LPCWSTR path) {
+        if (!m_path.empty()) { m_path.pop_back(); }
+        if (!m_path.empty() && m_path.back() == L'*') { m_path.pop_back(); }
+        if (!m_path.empty() && m_path.back() == L'\\') { m_path.pop_back(); }
+        m_path.push_back(L'\\');
+        m_path.insert(m_path.end(), path, path + wcslen(path));
+        m_path.push_back(L'\0');
+    }
+
+    U16Path relativeTo(U16Path const& parent_path) const {
+        U16Path ret{ *this };
+        auto it = std::mismatch(ret.m_path.begin(), ret.m_path.end(), parent_path.m_path.begin(), parent_path.m_path.end());
+        ret.m_path.erase(ret.m_path.begin(), it.first);
+        return ret;
     }
 };
 
-std::optional<U16String> OpenFolder(HWND parent_window) {
+std::optional<U16Path> OpenFolder(HWND parent_window) {
     CComPtr<IFileDialog> file_open_dialog = nullptr;
     HRESULT hres = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&file_open_dialog));
     if (!SUCCEEDED(hres)) {
@@ -159,11 +184,47 @@ std::optional<U16String> OpenFolder(HWND parent_window) {
             MessageBox(nullptr, TEXT("Error retrieving file open result display name"), TEXT("Error"), MB_ICONERROR);
             return std::nullopt;
         }
-        U16String ret{ filename };
+        U16Path ret{ filename };
+        ret.prependAbsolutePathToRemoveMaxPathLimit();
+        ret.append(L"*");
         CoTaskMemFree(filename);
         return ret;
     }
     return std::nullopt;
+}
+
+bool is_dot(LPCWSTR p) {
+    return p[0] == L'.' && p[1] == L'\0';
+}
+
+bool is_dotdot(LPCWSTR p) {
+    return p[0] == L'.' && p[1] == L'.' && p[2] == L'\0';
+}
+
+std::generator<LPCWSTR> iterateFiles(LPCWSTR path) {
+    std::vector<U16Path> directories;
+    U16Path base_path{ path };
+    directories.emplace_back(path);
+    while (!directories.empty()) {
+        WIN32_FIND_DATA find_data;
+        U16Path const current_path = std::move(directories.back());
+        directories.pop_back();
+        HANDLE hsearch = FindFirstFileEx(current_path.str(), FindExInfoBasic, &find_data, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
+        if (hsearch == INVALID_HANDLE_VALUE) {
+            MessageBox(nullptr, TEXT("Unable to open file for finding"), TEXT("Error"), MB_ICONERROR);
+        }
+        do {
+            if (is_dot(find_data.cFileName) || is_dotdot(find_data.cFileName)) { continue; }
+            U16Path p = current_path;
+            p.append(find_data.cFileName);
+            co_yield p.relativeTo(base_path).str();
+            if ((find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+                p.append(L"*");
+                directories.emplace_back(std::move(p));
+            }
+        } while (FindNextFile(hsearch, &find_data) != FALSE);
+        bool success = (GetLastError() == ERROR_NO_MORE_FILES);
+    }
 }
 
 LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -182,7 +243,13 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 MessageBox(hWnd, TEXT("About this!"), TEXT("About QuickerSFV"), MB_ICONINFORMATION);
                 return 0;
             } else if ((LOWORD(wParam) == ID_CREATE_CRC) || (LOWORD(wParam) == ID_CREATE_MD5)) {
-                OpenFolder(hWnd).and_then([](U16String s) -> std::optional<int> { return std::nullopt; });
+                if (auto opt = OpenFolder(hWnd); opt) {
+                    std::vector<U16Path> ps;
+                    for (LPCWSTR s : iterateFiles(opt->str())) {
+                        ps.emplace_back(s);
+                    }
+                    ps.back();
+                }
                 return 0;
             }
         }
