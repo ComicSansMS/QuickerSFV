@@ -15,6 +15,10 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
+#include <quicker_sfv/quicker_sfv.hpp>
+
+#include <ui/file_dialog.hpp>
+
 #ifndef WIN32_LEAN_AND_MEAN
 #   define WIN32_LEAN_AND_MEAN
 #endif
@@ -23,9 +27,11 @@
 #endif
 #include <Windows.h>
 #include <windowsx.h>
+#include <atlbase.h>
 #include <CommCtrl.h>
-#include <uxtheme.h>
+#include <ShObjIdl_core.h>
 #include <tchar.h>
+#include <uxtheme.h>
 
 #include <resource.h>
 
@@ -79,6 +85,87 @@ MainWindow::MainWindow()
 {
 }
 
+class AdviseGuard {
+private:
+    IFileDialog* m_file_dialog;
+    DWORD m_cookie;
+public:
+    explicit AdviseGuard(IFileDialog* file_dialog, DWORD cookie) 
+        :m_file_dialog(file_dialog), m_cookie(cookie)
+    { }
+    ~AdviseGuard() {
+        m_file_dialog->Unadvise(m_cookie);
+    }
+    AdviseGuard(AdviseGuard const&) = delete;
+    AdviseGuard& operator=(AdviseGuard const&) = delete;
+};
+
+class U16String {
+private:
+    size_t m_len;
+    std::unique_ptr<WCHAR[]> m_str;
+public:
+    explicit U16String(LPCWSTR zero_terminated_string)
+        :m_len(wcslen(zero_terminated_string) + 1), m_str(std::make_unique<WCHAR[]>(m_len))
+    {
+        wmemcpy_s(m_str.get(), m_len, zero_terminated_string, m_len);
+    }
+
+    LPCWSTR str() const noexcept {
+        return m_str.get();
+    }
+};
+
+std::optional<U16String> OpenFolder(HWND parent_window) {
+    CComPtr<IFileDialog> file_open_dialog = nullptr;
+    HRESULT hres = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&file_open_dialog));
+    if (!SUCCEEDED(hres)) {
+        MessageBox(nullptr, TEXT("Error file open dialog"), TEXT("Error"), MB_ICONERROR);
+        return std::nullopt;
+    }
+    CComPtr<quicker_sfv_gui::FileDialogEventHandler> file_dialog_event_handler = quicker_sfv_gui::createFileDialogEventHandler();
+    DWORD cookie;
+    file_open_dialog->Advise(file_dialog_event_handler, &cookie);
+    if (!SUCCEEDED(hres)) {
+        MessageBox(nullptr, TEXT("Error advising dialog event handler"), TEXT("Error"), MB_ICONERROR);
+        return std::nullopt;
+    }
+    AdviseGuard advise_guard{ file_open_dialog, cookie };
+    
+    FILEOPENDIALOGOPTIONS opts;
+    hres = file_open_dialog->GetOptions(&opts);
+    if (!SUCCEEDED(hres)) {
+        MessageBox(nullptr, TEXT("Error retrieving file dialog options"), TEXT("Error"), MB_ICONERROR);
+        return std::nullopt;
+    }
+    opts |= FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_DONTADDTORECENT;
+    hres = file_open_dialog->SetOptions(opts);
+    if (!SUCCEEDED(hres)) {
+        MessageBox(nullptr, TEXT("Error setting file dialog options"), TEXT("Error"), MB_ICONERROR);
+        return std::nullopt;
+    }
+    //file_open_dialog->SetTitle(TEXT("Select folder to create checksum file from"));
+    hres = file_open_dialog->Show(parent_window);
+    if (hres == S_OK) {
+        IShellItem* shell_result;
+        hres = file_open_dialog->GetResult(&shell_result);
+        if (hres != S_OK) {
+            MessageBox(nullptr, TEXT("Error retrieving file open result"), TEXT("Error"), MB_ICONERROR);
+            return std::nullopt;
+        }
+        LPWSTR filename;
+        hres = shell_result->GetDisplayName(SIGDN_FILESYSPATH, &filename);  // works always because FOS_FORCEFILESYSTEM above
+        if (hres != S_OK) {
+            MessageBox(nullptr, TEXT("Error retrieving file open result display name"), TEXT("Error"), MB_ICONERROR);
+            return std::nullopt;
+        }
+        U16String ret{ filename };
+        CoTaskMemFree(filename);
+        return ret;
+    }
+    return std::nullopt;
+}
+
 LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (msg == WM_DESTROY) {
         PostQuitMessage(0);
@@ -93,6 +180,9 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 return 0;
             } else if (LOWORD(wParam) == ID_HELP_ABOUT) {
                 MessageBox(hWnd, TEXT("About this!"), TEXT("About QuickerSFV"), MB_ICONINFORMATION);
+                return 0;
+            } else if ((LOWORD(wParam) == ID_CREATE_CRC) || (LOWORD(wParam) == ID_CREATE_MD5)) {
+                OpenFolder(hWnd).and_then([](U16String s) -> std::optional<int> { return std::nullopt; });
                 return 0;
             }
         }
@@ -157,8 +247,8 @@ BOOL MainWindow::createMainWindow(HINSTANCE hInstance, int nCmdShow,
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
-        688,
-        520,
+        400,
+        256,
         nullptr,
         hMenu,
         hInstance,
@@ -247,7 +337,7 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
     struct {
         TCHAR* name;
         int width;
-    } columns[] = { { column_name1, 305 }, { column_name2, 192 }, { column_name3, 120 } };
+    } columns[] = { { column_name1, 110 }, { column_name2, 110 }, { column_name3, 160 } };
     for (int i = 0; i < 3; ++i) {
         LV_COLUMN lv_column{
             .mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM,

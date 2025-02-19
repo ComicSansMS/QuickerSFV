@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+
+<Type Name="MD5Digest">
+  <DisplayString>{data[0],nvoxb}{data[1],nvoxb}{data[2],nvoxb}{data[3],nvoxb}{data[4],nvoxb}{data[5],nvoxb}{data[6],nvoxb}{data[7],nvoxb}{data[8],nvoxb}{data[9],nvoxb}{data[10],nvoxb}{data[11],nvoxb}{data[12],nvoxb}{data[13],nvoxb}{data[14],nvoxb}{data[15],nvoxb}</DisplayString>
+</Type>
+
+</AutoVisualizer>
