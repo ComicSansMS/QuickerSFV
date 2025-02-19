@@ -17,7 +17,7 @@ MD5Hasher::MD5Hasher()
 
 MD5Hasher::~MD5Hasher() = default;
 
-void MD5Hasher::addData(std::span<char> data)
+void MD5Hasher::addData(std::span<char const> data)
 {
     int res = MD5_Update(&m_impl->context, data.data(), data.size());
     if (res != 1) { throw std::runtime_error("Error updating md5"); }

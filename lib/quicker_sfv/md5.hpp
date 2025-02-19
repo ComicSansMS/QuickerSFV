@@ -15,7 +15,7 @@ public:
 
     ~MD5Hasher();
 
-    void addData(std::span<char> data);
+    void addData(std::span<char const> data);
 
     MD5Digest getDigest();
 };

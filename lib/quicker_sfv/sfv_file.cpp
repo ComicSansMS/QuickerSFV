@@ -4,6 +4,8 @@
 #include <string>
 #include <string_view>
 
+/// @todo fstream is huge (~210KiB)
+
 struct Ex {};
 
 SfvFile::SfvFile(std::filesystem::path filename) {
@@ -36,7 +38,7 @@ void SfvFile::serialize(std::filesystem::path out_filename) const {
     std::ofstream fout(out_filename);
     for (auto const& f : m_files) {
         auto const u8str = f.path.u8string();
-        fout << std::format("{} {}\n", reinterpret_cast<char const*>(u8str.c_str()), f.md5);
+        fout << std::format("{} *..\\{}\n", f.md5, reinterpret_cast<char const*>(u8str.c_str()));
     }
 }
 

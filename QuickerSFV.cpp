@@ -201,7 +201,13 @@ bool is_dotdot(LPCWSTR p) {
     return p[0] == L'.' && p[1] == L'.' && p[2] == L'\0';
 }
 
-std::generator<LPCWSTR> iterateFiles(LPCWSTR path) {
+struct FileInfo {
+    LPCWSTR absolute_path;
+    LPCWSTR relative_path;
+    uint64_t size;
+};
+
+std::generator<FileInfo> iterateFiles(LPCWSTR path) {
     std::vector<U16Path> directories;
     U16Path base_path{ path };
     directories.emplace_back(path);
@@ -217,14 +223,39 @@ std::generator<LPCWSTR> iterateFiles(LPCWSTR path) {
             if (is_dot(find_data.cFileName) || is_dotdot(find_data.cFileName)) { continue; }
             U16Path p = current_path;
             p.append(find_data.cFileName);
-            co_yield p.relativeTo(base_path).str();
+            uint64_t filesize = (static_cast<uint64_t>(find_data.nFileSizeHigh) << 32ull) | static_cast<uint64_t>(find_data.nFileSizeLow);
             if ((find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
                 p.append(L"*");
                 directories.emplace_back(std::move(p));
+            } else {
+                co_yield FileInfo{ .absolute_path = p.str(), .relative_path = p.relativeTo(base_path).str(), .size = filesize };
             }
         } while (FindNextFile(hsearch, &find_data) != FALSE);
         bool success = (GetLastError() == ERROR_NO_MORE_FILES);
+        FindClose(hsearch);
     }
+}
+
+MD5Digest hashFile(LPCWSTR filepath, uint64_t filesize) {
+    HANDLE hin = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+    if (hin == INVALID_HANDLE_VALUE) {
+        std::terminate();
+    }
+    HANDLE hmappedFile = CreateFileMapping(hin, nullptr, PAGE_READONLY, 0, 0, nullptr);
+    if (!hmappedFile) {
+        std::terminate();
+    }
+    LPVOID fptr = MapViewOfFile(hmappedFile, FILE_MAP_READ, 0, 0, 0);
+    if (!fptr) {
+        std::terminate();
+    }
+    MD5Hasher hasher;
+    std::span<char const> filespan{ reinterpret_cast<char const*>(fptr), (size_t)filesize };
+    hasher.addData(filespan);
+    UnmapViewOfFile(fptr);
+    CloseHandle(hmappedFile);
+    CloseHandle(hin);
+    return hasher.getDigest();
 }
 
 LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -244,11 +275,13 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 return 0;
             } else if ((LOWORD(wParam) == ID_CREATE_CRC) || (LOWORD(wParam) == ID_CREATE_MD5)) {
                 if (auto opt = OpenFolder(hWnd); opt) {
+                    SfvFile sfv_file;
                     std::vector<U16Path> ps;
-                    for (LPCWSTR s : iterateFiles(opt->str())) {
-                        ps.emplace_back(s);
+                    U16Path const base_path{ opt->str() };
+                    for (FileInfo const& info : iterateFiles(base_path.str())) {
+                        sfv_file.addEntry(info.relative_path, hashFile(info.absolute_path, info.size));
                     }
-                    ps.back();
+                    sfv_file.serialize("my_sfv.md5");
                 }
                 return 0;
             }
