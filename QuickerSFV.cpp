@@ -193,6 +193,77 @@ std::optional<U16Path> OpenFolder(HWND parent_window) {
     return std::nullopt;
 }
 
+const COMDLG_FILTERSPEC g_FileTypes[] =
+{
+    {L"File Verification Database", L"*.sfv;*.crc;*.txt;*.ckz;*.csv;*.par;*.md5"},
+    {L"All Files",                  L"*.*"}
+};
+enum class FileType: UINT {
+    VerificationDB = 0,
+    AllFiles       = 1
+};
+
+std::optional<U16Path> OpenFile(HWND parent_window) {
+    CComPtr<IFileDialog> file_open_dialog = nullptr;
+    HRESULT hres = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&file_open_dialog));
+    if (!SUCCEEDED(hres)) {
+        MessageBox(nullptr, TEXT("Error file open dialog"), TEXT("Error"), MB_ICONERROR);
+        return std::nullopt;
+    }
+    CComPtr<quicker_sfv_gui::FileDialogEventHandler> file_dialog_event_handler = quicker_sfv_gui::createFileDialogEventHandler();
+    DWORD cookie;
+    file_open_dialog->Advise(file_dialog_event_handler, &cookie);
+    if (!SUCCEEDED(hres)) {
+        MessageBox(nullptr, TEXT("Error advising dialog event handler"), TEXT("Error"), MB_ICONERROR);
+        return std::nullopt;
+    }
+    AdviseGuard advise_guard{ file_open_dialog, cookie };
+
+    FILEOPENDIALOGOPTIONS opts;
+    hres = file_open_dialog->GetOptions(&opts);
+    if (!SUCCEEDED(hres)) {
+        MessageBox(nullptr, TEXT("Error retrieving file dialog options"), TEXT("Error"), MB_ICONERROR);
+        return std::nullopt;
+    }
+    opts |= FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST;
+    hres = file_open_dialog->SetOptions(opts);
+    if (!SUCCEEDED(hres)) {
+        MessageBox(nullptr, TEXT("Error setting file dialog options"), TEXT("Error"), MB_ICONERROR);
+        return std::nullopt;
+    }
+    hres = file_open_dialog->SetFileTypes(ARRAYSIZE(g_FileTypes), g_FileTypes);
+    if (!SUCCEEDED(hres)) {
+        MessageBox(nullptr, TEXT("Error setting file dialog file types"), TEXT("Error"), MB_ICONERROR);
+        return std::nullopt;
+    }
+    hres = file_open_dialog->SetFileTypeIndex(static_cast<UINT>(FileType::VerificationDB));
+    if (!SUCCEEDED(hres)) {
+        MessageBox(nullptr, TEXT("Error setting file dialog file type index"), TEXT("Error"), MB_ICONERROR);
+        return std::nullopt;
+    }
+    //file_open_dialog->SetTitle(TEXT("Select folder to create checksum file from"));
+    hres = file_open_dialog->Show(parent_window);
+    if (hres == S_OK) {
+        IShellItem* shell_result;
+        hres = file_open_dialog->GetResult(&shell_result);
+        if (hres != S_OK) {
+            MessageBox(nullptr, TEXT("Error retrieving file open result"), TEXT("Error"), MB_ICONERROR);
+            return std::nullopt;
+        }
+        LPWSTR filename;
+        hres = shell_result->GetDisplayName(SIGDN_FILESYSPATH, &filename);  // works always because FOS_FORCEFILESYSTEM above
+        if (hres != S_OK) {
+            MessageBox(nullptr, TEXT("Error retrieving file open result display name"), TEXT("Error"), MB_ICONERROR);
+            return std::nullopt;
+        }
+        U16Path ret{ filename };
+        CoTaskMemFree(filename);
+        return ret;
+    }
+    return std::nullopt;
+}
+
+
 bool is_dot(LPCWSTR p) {
     return p[0] == L'.' && p[1] == L'\0';
 }
@@ -273,6 +344,11 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             } else if (LOWORD(wParam) == ID_HELP_ABOUT) {
                 MessageBox(hWnd, TEXT("About this!"), TEXT("About QuickerSFV"), MB_ICONINFORMATION);
                 return 0;
+            } else if (LOWORD(wParam) == ID_FILE_OPEN) {
+                if (auto opt = OpenFile(hWnd); opt) {
+                    SfvFile sfv_file(opt->str());
+                }
+                return 0;
             } else if ((LOWORD(wParam) == ID_CREATE_CRC) || (LOWORD(wParam) == ID_CREATE_MD5)) {
                 if (auto opt = OpenFolder(hWnd); opt) {
                     SfvFile sfv_file;
@@ -281,7 +357,7 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     for (FileInfo const& info : iterateFiles(base_path.str())) {
                         sfv_file.addEntry(info.relative_path, hashFile(info.absolute_path, info.size));
                     }
-                    sfv_file.serialize("my_sfv.md5");
+                    sfv_file.serialize(u8"my_sfv.md5");
                 }
                 return 0;
             }

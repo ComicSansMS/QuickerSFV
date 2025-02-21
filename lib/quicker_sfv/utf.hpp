@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <string>
+#include <string_view>
 
 struct DecodeResult {
     uint32_t code_units_consumed;
@@ -27,11 +29,19 @@ struct Utf8Encode {
 };
 
 DecodeResult decodeUtf16(std::span<char16_t const> range);
+DecodeResult decodeUtf16_non_strict(std::span<char16_t const> range);
 Utf16Encode encodeUtf32ToUtf16(char32_t c);
 
 DecodeResult decodeUtf8(std::span<char8_t const> range);
 Utf8Encode encodeUtf32ToUtf8(char32_t c);
 
 bool checkValidUtf8(std::span<std::byte const> range);
+bool checkValidUtf8(std::string_view str);
+
+std::u8string assumeUtf8(std::string_view str);
+
+std::u8string convertToUtf8(std::u16string_view str);
+std::u16string convertToUtf16(std::u8string_view str);
+std::wstring convertToWstring(std::u8string_view str);
 
 #endif

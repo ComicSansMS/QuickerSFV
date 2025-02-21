@@ -22,6 +22,45 @@ DecodeResult decodeUtf16(std::span<char16_t const> range) {
                 acc |= ((c & (~SURROGATE_MASK)) << 10);
                 state = State::Awaiting1CodeUnit;
             } else if ((c & SURROGATE_MASK) == SURROGATE_HEADER_LOW) {
+                return error;
+            } else {
+                return DecodeResult{ .code_units_consumed = 1, .code_point = static_cast<char32_t>(c) };
+            }
+        } break;
+        case State::Awaiting1CodeUnit: {
+            if ((c & SURROGATE_MASK) == SURROGATE_HEADER_LOW) {
+                acc |= (c & (~SURROGATE_MASK));
+                acc += 0x0001'0000;
+                return DecodeResult{ .code_units_consumed = 2, .code_point = acc };
+            }
+            return error;
+        } break;
+        default: return error;
+        }
+    }
+    return error;
+}
+
+DecodeResult decodeUtf16_non_strict(std::span<char16_t const> range) {
+    constexpr DecodeResult const error = DecodeResult{ .code_units_consumed = 0, .code_point = 0 };
+    enum State {
+        Neutral,
+        Awaiting1CodeUnit,
+    } state = State::Neutral;
+    constexpr char16_t const SURROGATE_MASK = 0xfc00;
+    constexpr char16_t const SURROGATE_HEADER_HIGH = 0xd800;
+    constexpr char16_t const SURROGATE_HEADER_LOW = 0xdc00;
+    size_t i = 0;
+    size_t const i_end = range.size();
+    char32_t acc = 0;
+    for (; i < i_end; ++i) {
+        wchar_t const c = range[i];
+        switch (state) {
+        case State::Neutral: {
+            if ((c & SURROGATE_MASK) == SURROGATE_HEADER_HIGH) {
+                acc |= ((c & (~SURROGATE_MASK)) << 10);
+                state = State::Awaiting1CodeUnit;
+            } else if ((c & SURROGATE_MASK) == SURROGATE_HEADER_LOW) {
                 // technically a decoding error, but we treat it like a single character
                 return DecodeResult{ .code_units_consumed = 1, .code_point = static_cast<char32_t>(c) };
             } else {
@@ -37,6 +76,7 @@ DecodeResult decodeUtf16(std::span<char16_t const> range) {
             // technically a decoding error, but we treat it like a single character
             return DecodeResult{ .code_units_consumed = 1, .code_point = static_cast<char32_t>(range[i - 1]) };
         } break;
+        default: return error;
         }
     }
     return error;
@@ -141,7 +181,7 @@ Utf8Encode encodeUtf32ToUtf8(char32_t c) {
             static_cast<char8_t>(((c >>  6) & 0b0011'1111) | 0b1000'0000),
             static_cast<char8_t>((c         & 0b0011'1111) | 0b1000'0000)
         } };
-    } else {
+    } else if (c <= 0x10ffff) {
         return Utf8Encode{ .number_of_code_units = 4, .encode = {
             static_cast<char8_t>(((c >> 18) & 0b0000'0111) | 0b1111'0000),
             static_cast<char8_t>(((c >> 12) & 0b0011'1111) | 0b1000'0000),
@@ -162,4 +202,40 @@ bool checkValidUtf8(std::span<std::byte const> range) {
     }
 }
 
+bool checkValidUtf8(std::string_view str) {
+    return checkValidUtf8(std::span<std::byte const>(reinterpret_cast<std::byte const*>(str.data()), str.size()));
+}
+
+std::u8string assumeUtf8(std::string_view str) {
+    std::u8string ret;
+    ret.reserve(str.size() + 1);
+    for (auto const& c : str) { ret.push_back(c); }
+    return ret;
+}
+
+std::u8string convertToUtf8(std::u16string_view str) {
+    std::u8string ret;
+    while (!str.empty()) {
+        auto const decode_result = decodeUtf16(str);
+        str = str.substr(decode_result.code_units_consumed);
+        auto const utf8_encode = encodeUtf32ToUtf8(decode_result.code_point);
+        ret.append(utf8_encode.encode, utf8_encode.number_of_code_units);
+    }
+    return ret;
+}
+
+std::u16string convertToUtf16(std::u8string_view str) {
+    std::u16string ret;
+    while (!str.empty()) {
+        auto const decode_result = decodeUtf8(str);
+        str = str.substr(decode_result.code_units_consumed);
+        auto const utf16_encode = encodeUtf32ToUtf16(decode_result.code_point);
+        ret.append(utf16_encode.encode, utf16_encode.number_of_code_units);
+    }
+    return ret;
+}
+
+std::wstring convertToWstring(std::u8string_view str) {
+    return std::wstring(reinterpret_cast<wchar_t const*>(convertToUtf16(str).c_str()));
+}
 

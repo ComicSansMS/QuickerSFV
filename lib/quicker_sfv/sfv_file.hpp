@@ -3,31 +3,35 @@
 
 #include <quicker_sfv/md5_digest.hpp>
 
-#include <filesystem>
 #include <span>
+#include <string>
+#include <string_view>
 #include <vector>
 
 class SfvFile {
 public:
     struct Entry {
-        std::filesystem::path path;
+        std::u8string path;
         MD5Digest md5;
     };
 private:
     std::vector<Entry> m_files;
-    std::filesystem::path m_basePath;
 public:
     SfvFile() = default;
 
-    SfvFile(std::filesystem::path filename);
+    explicit SfvFile(std::u8string_view filename);
+
+    explicit SfvFile(std::u16string_view filename);
+
+    explicit SfvFile(wchar_t const* filename);
 
     std::span<const Entry> getEntries() const;
 
-    std::filesystem::path getBasePath() const;
+    void serialize(std::u8string_view out_filename) const;
 
-    void serialize(std::filesystem::path out_filename) const;
-
-    void addEntry(std::filesystem::path p, MD5Digest md5);
+    void addEntry(std::u8string_view p, MD5Digest md5);
+    void addEntry(std::u16string_view p, MD5Digest md5);
+    void addEntry(wchar_t const* utf16_zero_terminated, MD5Digest md5);
 };
 
 #endif
