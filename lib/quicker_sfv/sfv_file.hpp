@@ -3,10 +3,13 @@
 
 #include <quicker_sfv/md5_digest.hpp>
 
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
+
+class FileInput;
 
 class SfvFile {
 public:
@@ -19,11 +22,13 @@ private:
 public:
     SfvFile() = default;
 
-    explicit SfvFile(std::u8string_view filename);
+    static std::optional<SfvFile> readFromFile(std::u8string_view filename);
 
-    explicit SfvFile(std::u16string_view filename);
+    static std::optional<SfvFile> readFromFile(std::u16string_view filename);
 
-    explicit SfvFile(wchar_t const* filename);
+    static std::optional<SfvFile> readFromFile(wchar_t const* filename);
+
+    static std::optional<SfvFile> readFromFile(FileInput& file_input);
 
     std::span<const Entry> getEntries() const;
 

@@ -24,6 +24,7 @@ target_sources(quicker_sfv
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/sfv_file.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/utf.hpp
     PRIVATE
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/file_io.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5_digest.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/quicker_sfv.cpp

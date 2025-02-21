@@ -25,6 +25,7 @@ std::byte hex_char_to_nibble(char x) {
     case 'E': return std::byte{ 14 };
     case 'f': return std::byte{ 15 };
     case 'F': return std::byte{ 15 };
+    default: std::abort();
     }
 }
 
@@ -41,4 +42,8 @@ MD5Digest MD5Digest::fromString(std::string_view str) {
         ret.data[i] = hex_str_to_byte(upper, lower);
     }
     return ret;
+}
+
+MD5Digest MD5Digest::fromString(std::u8string_view str) {
+    return fromString(std::string_view(reinterpret_cast<char const*>(str.data()), str.size()));
 }

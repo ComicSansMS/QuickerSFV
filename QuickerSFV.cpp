@@ -346,7 +346,8 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 return 0;
             } else if (LOWORD(wParam) == ID_FILE_OPEN) {
                 if (auto opt = OpenFile(hWnd); opt) {
-                    SfvFile sfv_file(opt->str());
+                    std::optional<SfvFile> sfv_file = SfvFile::readFromFile(opt->str());
+                    SfvFile& f = *sfv_file;
                 }
                 return 0;
             } else if ((LOWORD(wParam) == ID_CREATE_CRC) || (LOWORD(wParam) == ID_CREATE_MD5)) {
