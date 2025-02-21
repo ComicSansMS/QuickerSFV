@@ -44,6 +44,39 @@
 #include <utility>
 #include <vector>
 
+class Win32FileReader : public FileInput {
+private:
+    HANDLE m_fin;
+    bool m_eof;
+public:
+    Win32FileReader(wchar_t const* filename)
+        :m_eof(false)
+    {
+        m_fin = CreateFile(filename, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (m_fin == INVALID_HANDLE_VALUE) {
+            std::terminate();
+        }
+    }
+
+    ~Win32FileReader() override {
+        CloseHandle(m_fin);
+    }
+
+    size_t read(std::span<std::byte> read_buffer) override {
+        if (m_eof) { return FileInput::RESULT_END_OF_FILE; }
+        DWORD bytes_read = 0;
+        if (!ReadFile(m_fin, read_buffer.data(), read_buffer.size(), &bytes_read, nullptr)) {
+            std::terminate();
+        }
+        if (bytes_read == 0) {
+            m_eof = true;
+            return FileInput::RESULT_END_OF_FILE;
+        }
+        return bytes_read;
+    }
+};
+
+
 class MainWindow {
 private:
     HINSTANCE m_hInstance;
@@ -346,7 +379,8 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 return 0;
             } else if (LOWORD(wParam) == ID_FILE_OPEN) {
                 if (auto opt = OpenFile(hWnd); opt) {
-                    std::optional<SfvFile> sfv_file = SfvFile::readFromFile(opt->str());
+                    Win32FileReader reader(opt->str());
+                    std::optional<SfvFile> sfv_file = SfvFile::readFromFile(reader);
                     SfvFile& f = *sfv_file;
                 }
                 return 0;

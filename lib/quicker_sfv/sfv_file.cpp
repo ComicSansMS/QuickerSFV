@@ -4,7 +4,6 @@
 #include <quicker_sfv/utf.hpp>
 
 #include <algorithm>
-#include <fstream>
 #include <optional>
 #include <vector>
 
@@ -146,50 +145,15 @@ std::optional<SfvFile> SfvFile::readFromFile(FileInput& file_input) {
     return ret;
 }
 
-struct Ex {};
-
-class FstreamReader: public FileInput {
-private:
-    std::fstream m_fin;
-public:
-    FstreamReader(std::u8string_view filename)
-        :m_fin(reinterpret_cast<char const*>(std::u8string{ filename }.c_str()))
-    {}
-    ~FstreamReader() override = default;
-    size_t read(std::span<std::byte> read_buffer) override {
-        if (m_fin.eof()) { return FileInput::RESULT_END_OF_FILE; }
-        if (!m_fin) { return 0; }
-        m_fin.read(reinterpret_cast<char*>(read_buffer.data()), read_buffer.size());
-        size_t const ret = m_fin.gcount();
-        if ((ret == 0) && m_fin.eof()) {
-            return FileInput::RESULT_END_OF_FILE;
-        }
-        return ret;
-    }
-};
-
-std::optional<SfvFile> SfvFile::readFromFile(std::u8string_view filename) {
-    FstreamReader fread(filename);
-    return readFromFile(fread);
-}
-
-std::optional<SfvFile> SfvFile::readFromFile(std::u16string_view filename) {
-    return readFromFile(convertToUtf8(filename));
-}
-
-std::optional<SfvFile> SfvFile::readFromFile(wchar_t const* filename) {
-    return readFromFile(reinterpret_cast<char16_t const*>(filename));
-}
-
 std::span<const SfvFile::Entry> SfvFile::getEntries() const {
     return m_files;
 }
 
 void SfvFile::serialize(std::u8string_view out_filename) const {
-    std::ofstream fout(reinterpret_cast<char const*>(std::u8string{ out_filename }.c_str()));
-    for (auto const& f : m_files) {
-        fout << std::format("{} *..\\{}\n", f.md5, reinterpret_cast<char const*>(f.path.c_str()));
-    }
+    //std::ofstream fout(reinterpret_cast<char const*>(std::u8string{ out_filename }.c_str()));
+    //for (auto const& f : m_files) {
+    //    fout << std::format("{} *..\\{}\n", f.md5, reinterpret_cast<char const*>(f.path.c_str()));
+    //}
 }
 
 void SfvFile::addEntry(std::u8string_view p, MD5Digest md5) {

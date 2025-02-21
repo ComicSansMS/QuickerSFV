@@ -22,12 +22,6 @@ private:
 public:
     SfvFile() = default;
 
-    static std::optional<SfvFile> readFromFile(std::u8string_view filename);
-
-    static std::optional<SfvFile> readFromFile(std::u16string_view filename);
-
-    static std::optional<SfvFile> readFromFile(wchar_t const* filename);
-
     static std::optional<SfvFile> readFromFile(FileInput& file_input);
 
     std::span<const Entry> getEntries() const;
