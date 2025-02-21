@@ -149,11 +149,15 @@ std::span<const SfvFile::Entry> SfvFile::getEntries() const {
     return m_files;
 }
 
-void SfvFile::serialize(std::u8string_view out_filename) const {
-    //std::ofstream fout(reinterpret_cast<char const*>(std::u8string{ out_filename }.c_str()));
-    //for (auto const& f : m_files) {
-    //    fout << std::format("{} *..\\{}\n", f.md5, reinterpret_cast<char const*>(f.path.c_str()));
-    //}
+void SfvFile::serialize(FileOutput& file_output) const {
+    for (auto const& f : m_files) {
+        //auto out_str = std::format("{} *..\\{}\n", f.md5, reinterpret_cast<char const*>(f.path.c_str()));
+        auto out_str = f.md5.toString();
+        out_str.append(u8" *..\\");
+        out_str.append(f.path);
+        out_str.push_back(u8'\n');
+        file_output.write(std::span<std::byte const>(reinterpret_cast<std::byte const*>(out_str.data()), out_str.size()));
+    }
 }
 
 void SfvFile::addEntry(std::u8string_view p, MD5Digest md5) {

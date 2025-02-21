@@ -420,7 +420,8 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     for (FileInfo const& info : iterateFiles(base_path.str())) {
                         sfv_file.addEntry(info.relative_path, hashFile(info.absolute_path, info.size));
                     }
-                    sfv_file.serialize(u8"my_sfv.md5");
+                    FileOutputWin32 writer(L"my_sfv.md5");
+                    sfv_file.serialize(writer);
                 }
                 return 0;
             }

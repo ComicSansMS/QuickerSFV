@@ -10,6 +10,7 @@
 #include <vector>
 
 class FileInput;
+class FileOutput;
 
 class SfvFile {
 public:
@@ -26,7 +27,7 @@ public:
 
     std::span<const Entry> getEntries() const;
 
-    void serialize(std::u8string_view out_filename) const;
+    void serialize(FileOutput& file_output) const;
 
     void addEntry(std::u8string_view p, MD5Digest md5);
     void addEntry(std::u16string_view p, MD5Digest md5);

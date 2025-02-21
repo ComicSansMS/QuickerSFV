@@ -3,6 +3,7 @@
 #include <openssl/md5.h>
 
 #include <array>
+#include <stdexcept>
 
 struct MD5Hasher::Pimpl {
     MD5_CTX context;
