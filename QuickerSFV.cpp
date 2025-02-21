@@ -39,34 +39,36 @@
 #include <bit>
 #include <cstring>
 #include <generator>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <utility>
 #include <vector>
 
-class Win32FileReader : public FileInput {
+class FileInputWin32 : public FileInput {
 private:
     HANDLE m_fin;
     bool m_eof;
 public:
-    Win32FileReader(wchar_t const* filename)
+    FileInputWin32(wchar_t const* filename)
         :m_eof(false)
     {
         m_fin = CreateFile(filename, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (m_fin == INVALID_HANDLE_VALUE) {
-            std::terminate();
+            std::abort();
         }
     }
 
-    ~Win32FileReader() override {
+    ~FileInputWin32() override {
         CloseHandle(m_fin);
     }
 
     size_t read(std::span<std::byte> read_buffer) override {
+        if (read_buffer.size() >= std::numeric_limits<DWORD>::max()) { std::abort(); }
         if (m_eof) { return FileInput::RESULT_END_OF_FILE; }
         DWORD bytes_read = 0;
-        if (!ReadFile(m_fin, read_buffer.data(), read_buffer.size(), &bytes_read, nullptr)) {
-            std::terminate();
+        if (!ReadFile(m_fin, read_buffer.data(), static_cast<DWORD>(read_buffer.size()), &bytes_read, nullptr)) {
+            std::abort();
         }
         if (bytes_read == 0) {
             m_eof = true;
@@ -76,6 +78,32 @@ public:
     }
 };
 
+
+class FileOutputWin32 : public FileOutput {
+private:
+    HANDLE m_fout;
+public:
+    FileOutputWin32(wchar_t const* filename)
+    {
+        m_fout = CreateFile(filename, GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (m_fout == INVALID_HANDLE_VALUE) {
+            std::abort();
+        }
+    }
+
+    ~FileOutputWin32() override {
+        CloseHandle(m_fout);
+    }
+
+    size_t write(std::span<std::byte const> bytes_to_write) override {
+        if (bytes_to_write.size() >= std::numeric_limits<DWORD>::max()) { std::abort(); }
+        DWORD bytes_written = 0;
+        if (!WriteFile(m_fout, bytes_to_write.data(), static_cast<DWORD>(bytes_to_write.size()), &bytes_written, nullptr)) {
+            return 0;
+        }
+        return bytes_written;
+    }
+};
 
 class MainWindow {
 private:
@@ -343,15 +371,15 @@ std::generator<FileInfo> iterateFiles(LPCWSTR path) {
 MD5Digest hashFile(LPCWSTR filepath, uint64_t filesize) {
     HANDLE hin = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
     if (hin == INVALID_HANDLE_VALUE) {
-        std::terminate();
+        std::abort();
     }
     HANDLE hmappedFile = CreateFileMapping(hin, nullptr, PAGE_READONLY, 0, 0, nullptr);
     if (!hmappedFile) {
-        std::terminate();
+        std::abort();
     }
     LPVOID fptr = MapViewOfFile(hmappedFile, FILE_MAP_READ, 0, 0, 0);
     if (!fptr) {
-        std::terminate();
+        std::abort();
     }
     MD5Hasher hasher;
     std::span<char const> filespan{ reinterpret_cast<char const*>(fptr), (size_t)filesize };
@@ -379,7 +407,7 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 return 0;
             } else if (LOWORD(wParam) == ID_FILE_OPEN) {
                 if (auto opt = OpenFile(hWnd); opt) {
-                    Win32FileReader reader(opt->str());
+                    FileInputWin32 reader(opt->str());
                     std::optional<SfvFile> sfv_file = SfvFile::readFromFile(reader);
                     SfvFile& f = *sfv_file;
                 }
