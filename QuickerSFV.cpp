@@ -119,8 +119,8 @@ private:
         bool status_ok;
     };
     std::vector<ListViewEntry> m_listEntries;
-private:
-    explicit MainWindow(HINSTANCE hInstance);
+    HIMAGELIST m_imageList;
+    std::optional<SfvFile> m_sfvFile;
 public:
     MainWindow();
 
@@ -144,7 +144,7 @@ private:
 
 MainWindow::MainWindow()
     :m_hInstance(nullptr), m_windowTitle(nullptr), m_hWnd(nullptr), m_hTextFieldLeft(nullptr), m_hTextFieldRight(nullptr),
-     m_hListView(nullptr)
+     m_hListView(nullptr), m_imageList(nullptr)
 {
 }
 
@@ -324,6 +324,67 @@ std::optional<U16Path> OpenFile(HWND parent_window) {
     return std::nullopt;
 }
 
+std::optional<U16Path> SaveFile(HWND parent_window) {
+    CComPtr<IFileDialog> file_open_dialog = nullptr;
+    HRESULT hres = CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&file_open_dialog));
+    if (!SUCCEEDED(hres)) {
+        MessageBox(nullptr, TEXT("Error file open dialog"), TEXT("Error"), MB_ICONERROR);
+        return std::nullopt;
+    }
+    CComPtr<quicker_sfv_gui::FileDialogEventHandler> file_dialog_event_handler = quicker_sfv_gui::createFileDialogEventHandler();
+    DWORD cookie;
+    file_open_dialog->Advise(file_dialog_event_handler, &cookie);
+    if (!SUCCEEDED(hres)) {
+        MessageBox(nullptr, TEXT("Error advising dialog event handler"), TEXT("Error"), MB_ICONERROR);
+        return std::nullopt;
+    }
+    AdviseGuard advise_guard{ file_open_dialog, cookie };
+
+    FILEOPENDIALOGOPTIONS opts;
+    hres = file_open_dialog->GetOptions(&opts);
+    if (!SUCCEEDED(hres)) {
+        MessageBox(nullptr, TEXT("Error retrieving file dialog options"), TEXT("Error"), MB_ICONERROR);
+        return std::nullopt;
+    }
+    opts |= FOS_FORCEFILESYSTEM;
+    hres = file_open_dialog->SetOptions(opts);
+    if (!SUCCEEDED(hres)) {
+        MessageBox(nullptr, TEXT("Error setting file dialog options"), TEXT("Error"), MB_ICONERROR);
+        return std::nullopt;
+    }
+    hres = file_open_dialog->SetFileTypes(ARRAYSIZE(g_FileTypes), g_FileTypes);
+    if (!SUCCEEDED(hres)) {
+        MessageBox(nullptr, TEXT("Error setting file dialog file types"), TEXT("Error"), MB_ICONERROR);
+        return std::nullopt;
+    }
+    hres = file_open_dialog->SetFileTypeIndex(static_cast<UINT>(FileType::VerificationDB));
+    if (!SUCCEEDED(hres)) {
+        MessageBox(nullptr, TEXT("Error setting file dialog file type index"), TEXT("Error"), MB_ICONERROR);
+        return std::nullopt;
+    }
+    //file_open_dialog->SetTitle(TEXT("Select folder to create checksum file from"));
+    hres = file_open_dialog->Show(parent_window);
+    if (hres == S_OK) {
+        IShellItem* shell_result;
+        hres = file_open_dialog->GetResult(&shell_result);
+        if (hres != S_OK) {
+            MessageBox(nullptr, TEXT("Error retrieving file open result"), TEXT("Error"), MB_ICONERROR);
+            return std::nullopt;
+        }
+        LPWSTR filename;
+        hres = shell_result->GetDisplayName(SIGDN_FILESYSPATH, &filename);  // works always because FOS_FORCEFILESYSTEM above
+        if (hres != S_OK) {
+            MessageBox(nullptr, TEXT("Error retrieving file open result display name"), TEXT("Error"), MB_ICONERROR);
+            return std::nullopt;
+        }
+        U16Path ret{ filename };
+        ret.prependAbsolutePathToRemoveMaxPathLimit();
+        CoTaskMemFree(filename);
+        return ret;
+    }
+    return std::nullopt;
+}
+
 
 bool is_dot(LPCWSTR p) {
     return p[0] == L'.' && p[1] == L'\0';
@@ -420,8 +481,11 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     for (FileInfo const& info : iterateFiles(base_path.str())) {
                         sfv_file.addEntry(info.relative_path, hashFile(info.absolute_path, info.size));
                     }
-                    FileOutputWin32 writer(L"my_sfv.md5");
-                    sfv_file.serialize(writer);
+                    if (auto opt_s = SaveFile(hWnd); opt_s) {
+                        auto filename = opt_s->str();
+                        FileOutputWin32 writer(filename);
+                        sfv_file.serialize(writer);
+                    }
                 }
                 return 0;
             }
@@ -458,8 +522,12 @@ LRESULT MainWindow::populateListView(NMHDR* nmh) {
                 _tcsncpy_s(disp_info->item.pszText, disp_info->item.cchTextMax,
                     test, _TRUNCATE);
             }
-        } else if (disp_info->item.mask & LVIF_IMAGE) {
+        } 
+        if (disp_info->item.mask & LVIF_IMAGE) {
             // @todo
+            if (disp_info->item.iSubItem == 0) {
+                disp_info->item.iImage = disp_info->item.iItem % 3;
+            }
         }
     } else if (nmh->code == LVN_ODCACHEHINT) {
         // @todo
@@ -593,6 +661,29 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
 
     SetWindowFont(m_hTextFieldLeft, GetWindowFont(m_hListView), TRUE);
     SetWindowFont(m_hTextFieldRight, GetWindowFont(m_hListView), TRUE);
+
+    constexpr WORD const icon_id_list[] = { IDI_ICON_CHECKMARK, IDI_ICON_CROSS, IDI_ICON_INFO };
+    constexpr int const number_of_icons = ARRAYSIZE(icon_id_list);
+    int const icon_size_x = GetSystemMetrics(SM_CXSMICON);
+    int const icon_size_y = GetSystemMetrics(SM_CYSMICON);
+    m_imageList = ImageList_Create(icon_size_x, icon_size_y, ILC_MASK | ILC_COLORDDB, number_of_icons, 0);
+    if (!m_imageList) {
+        MessageBox(nullptr, TEXT("Error creating window ui element"), m_windowTitle, MB_ICONERROR);
+        return -1;
+    }
+
+    for (int i = 0; i < number_of_icons; ++i) {
+        HANDLE hicon = LoadImage(m_hInstance, MAKEINTRESOURCE(icon_id_list[i]), IMAGE_ICON, icon_size_x, icon_size_y, LR_DEFAULTCOLOR);
+        if (!hicon) {
+            MessageBox(nullptr, TEXT("Error creating window ui element"), m_windowTitle, MB_ICONERROR);
+            return -1;
+        }
+        if (ImageList_AddIcon(m_imageList, static_cast<HICON>(hicon)) != i) {
+            MessageBox(nullptr, TEXT("Error creating window ui element"), m_windowTitle, MB_ICONERROR);
+            return -1;
+        }
+    }
+    ListView_SetImageList(m_hListView, m_imageList, LVSIL_SMALL);
 
     return 0;
 }

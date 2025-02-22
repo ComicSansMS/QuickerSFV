@@ -5,6 +5,9 @@
 #define IDI_ICON_MAIN_WINDOW            3
 #define IDI_ICON1                       101
 #define IDR_MENU1                       102
+#define IDI_ICON_CHECKMARK              106
+#define IDI_ICON_CROSS                  107
+#define IDI_ICON_INFO                   108
 #define ID_FILE_EXIT                    40001
 #define ID_HELP_ABOUT                   40002
 #define ID_FILE_OPEN                    40003
@@ -20,7 +23,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        103
+#define _APS_NEXT_RESOURCE_VALUE        109
 #define _APS_NEXT_COMMAND_VALUE         40011
 #define _APS_NEXT_CONTROL_VALUE         1001
 #define _APS_NEXT_SYMED_VALUE           101

@@ -18,8 +18,6 @@ struct Version {
 
 Version getVersion();
 
-void md5(void* data, size_t size, unsigned char* out);
-
 }
 
 #endif
