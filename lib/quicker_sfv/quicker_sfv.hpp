@@ -18,6 +18,7 @@ struct Version {
 
 Version getVersion();
 
+bool supportsAvx512();
 }
 
 #endif

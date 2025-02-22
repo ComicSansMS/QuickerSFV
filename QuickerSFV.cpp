@@ -110,6 +110,7 @@ private:
     HINSTANCE m_hInstance;
     TCHAR const* m_windowTitle;
     HWND m_hWnd;
+    HMENU m_hMenu;
     HWND m_hTextFieldLeft;
     HWND m_hTextFieldRight;
     HWND m_hListView;
@@ -473,6 +474,16 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     SfvFile& f = *sfv_file;
                 }
                 return 0;
+            } else if (LOWORD(wParam) == ID_OPTIONS_USEAVX512) {
+                MENUITEMINFO mii{ .cbSize = sizeof(MENUITEMINFO), .fMask = MIIM_STATE };
+                GetMenuItemInfo(m_hMenu, ID_OPTIONS_USEAVX512, FALSE, &mii);
+                if ((mii.fState & MFS_CHECKED) != 0) {
+                    mii.fState &= ~MFS_CHECKED;
+                } else {
+                    mii.fState |= MFS_CHECKED;
+                }
+                SetMenuItemInfo(m_hMenu, ID_OPTIONS_USEAVX512, FALSE, &mii);
+
             } else if ((LOWORD(wParam) == ID_CREATE_CRC) || (LOWORD(wParam) == ID_CREATE_MD5)) {
                 if (auto opt = OpenFolder(hWnd); opt) {
                     SfvFile sfv_file;
@@ -542,10 +553,15 @@ BOOL MainWindow::createMainWindow(HINSTANCE hInstance, int nCmdShow,
 {
     m_hInstance = hInstance;
     m_windowTitle = window_title;
-    HMENU hMenu = LoadMenu(hInstance, MAKEINTRESOURCE(IDR_MENU1));
-    if (!hMenu) {
+    m_hMenu = LoadMenu(hInstance, MAKEINTRESOURCE(IDR_MENU1));
+    if (!m_hMenu) {
         MessageBox(nullptr, TEXT("Error creating menu"), window_title, MB_ICONERROR);
         return FALSE;
+    }
+    EnableMenuItem(m_hMenu, ID_OPTIONS_UPDATEDB, MF_BYCOMMAND | MF_DISABLED);
+    if (quicker_sfv::supportsAvx512()) {
+        MENUITEMINFO mii{ .cbSize = sizeof(MENUITEMINFO), .fMask = MIIM_STATE, .fState = MFS_ENABLED | MFS_CHECKED };
+        SetMenuItemInfo(m_hMenu, ID_OPTIONS_USEAVX512, FALSE, &mii);
     }
 
     static_assert((sizeof(MainWindow*) == sizeof(LPARAM)) && (sizeof(MainWindow*) == sizeof(LPVOID)));
@@ -558,13 +574,14 @@ BOOL MainWindow::createMainWindow(HINSTANCE hInstance, int nCmdShow,
         400,
         256,
         nullptr,
-        hMenu,
+        m_hMenu,
         hInstance,
         std::bit_cast<LPVOID>(this)
     );
     if (!m_hWnd) {
         MessageBox(nullptr, TEXT("Error creating main window"), m_windowTitle, MB_ICONERROR);
-        DestroyMenu(hMenu);
+        DestroyMenu(m_hMenu);
+        m_hMenu = nullptr;
         return FALSE;
     }
 
@@ -573,6 +590,10 @@ BOOL MainWindow::createMainWindow(HINSTANCE hInstance, int nCmdShow,
     ShowWindow(m_hWnd, nCmdShow);
     if (!UpdateWindow(m_hWnd)) {
         MessageBox(nullptr, TEXT("Error updating main window"), m_windowTitle, MB_ICONERROR);
+        DestroyWindow(m_hWnd);
+        m_hWnd = nullptr;
+        DestroyMenu(m_hMenu);
+        m_hMenu = nullptr;
         return FALSE;
     }
 

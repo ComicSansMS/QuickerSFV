@@ -11,6 +11,8 @@ add_compile_options($<$<CXX_COMPILER_ID:GNU>:-Wall>)
 add_compile_options($<$<CXX_COMPILER_ID:GNU>:-pedantic>)
 add_compile_options($<$<CXX_COMPILER_ID:GNU>:-Wextra>)
 
+add_subdirectory(external/chromium_zlib)
+
 add_library(quicker_sfv STATIC)
 target_sources(quicker_sfv
     PUBLIC
@@ -18,6 +20,7 @@ target_sources(quicker_sfv
     BASE_DIRS ${PROJECT_SOURCE_DIR}/lib
     FILES
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/file_io.hpp
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/crc32.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5_digest.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/quicker_sfv.hpp
@@ -25,6 +28,7 @@ target_sources(quicker_sfv
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/utf.hpp
     PRIVATE
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/file_io.cpp
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/crc32.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5_digest.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/quicker_sfv.cpp
@@ -35,7 +39,7 @@ if (MSVC)
     target_sources(quicker_sfv PRIVATE ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/quicker_sfv.natvis)
 endif ()
 target_compile_features(quicker_sfv PUBLIC cxx_std_20)
-target_link_libraries(quicker_sfv PUBLIC OpenSSL::Crypto)
+target_link_libraries(quicker_sfv PRIVATE OpenSSL::Crypto chromium-zlib)
 
 option(BUILD_TESTS "Determines whether to build tests." ON)
 if(BUILD_TESTS)
