@@ -9,6 +9,8 @@
 #include <string_view>
 #include <vector>
 
+namespace quicker_sfv {
+
 class FileInput;
 class FileOutput;
 
@@ -34,4 +36,5 @@ public:
     void addEntry(wchar_t const* utf16_zero_terminated, MD5Digest md5);
 };
 
+}
 #endif

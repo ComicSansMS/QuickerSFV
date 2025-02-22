@@ -37,6 +37,8 @@ std::byte higher_nibble(std::byte b) {
 }
 }
 
+namespace quicker_sfv {
+
 MD5Digest MD5Digest::fromString(std::u8string_view str) {
     MD5Digest ret;
     for (int i = 0; i < 16; ++i) {
@@ -57,3 +59,4 @@ std::u8string MD5Digest::toString() const {
     return ret;
 }
 
+}

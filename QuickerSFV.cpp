@@ -45,6 +45,8 @@
 #include <utility>
 #include <vector>
 
+using namespace quicker_sfv;
+
 class FileInputWin32 : public FileInput {
 private:
     HANDLE m_fin;
@@ -210,7 +212,7 @@ std::optional<U16Path> OpenFolder(HWND parent_window) {
         MessageBox(nullptr, TEXT("Error file open dialog"), TEXT("Error"), MB_ICONERROR);
         return std::nullopt;
     }
-    CComPtr<quicker_sfv_gui::FileDialogEventHandler> file_dialog_event_handler = quicker_sfv_gui::createFileDialogEventHandler();
+    CComPtr<gui::FileDialogEventHandler> file_dialog_event_handler = gui::createFileDialogEventHandler();
     DWORD cookie;
     file_open_dialog->Advise(file_dialog_event_handler, &cookie);
     if (!SUCCEEDED(hres)) {
@@ -272,7 +274,7 @@ std::optional<U16Path> OpenFile(HWND parent_window) {
         MessageBox(nullptr, TEXT("Error file open dialog"), TEXT("Error"), MB_ICONERROR);
         return std::nullopt;
     }
-    CComPtr<quicker_sfv_gui::FileDialogEventHandler> file_dialog_event_handler = quicker_sfv_gui::createFileDialogEventHandler();
+    CComPtr<gui::FileDialogEventHandler> file_dialog_event_handler = gui::createFileDialogEventHandler();
     DWORD cookie;
     file_open_dialog->Advise(file_dialog_event_handler, &cookie);
     if (!SUCCEEDED(hres)) {
@@ -332,7 +334,7 @@ std::optional<U16Path> SaveFile(HWND parent_window) {
         MessageBox(nullptr, TEXT("Error file open dialog"), TEXT("Error"), MB_ICONERROR);
         return std::nullopt;
     }
-    CComPtr<quicker_sfv_gui::FileDialogEventHandler> file_dialog_event_handler = quicker_sfv_gui::createFileDialogEventHandler();
+    CComPtr<gui::FileDialogEventHandler> file_dialog_event_handler = gui::createFileDialogEventHandler();
     DWORD cookie;
     file_open_dialog->Advise(file_dialog_event_handler, &cookie);
     if (!SUCCEEDED(hres)) {

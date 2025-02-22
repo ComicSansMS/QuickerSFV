@@ -7,6 +7,8 @@
 #include <string>
 #include <string_view>
 
+namespace quicker_sfv {
+
 struct DecodeResult {
     uint32_t code_units_consumed;
     char32_t code_point;
@@ -44,4 +46,5 @@ std::u8string convertToUtf8(std::u16string_view str);
 std::u16string convertToUtf16(std::u8string_view str);
 std::wstring convertToWstring(std::u8string_view str);
 
+}
 #endif

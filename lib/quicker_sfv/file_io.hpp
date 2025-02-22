@@ -5,6 +5,8 @@
 #include <limits>
 #include <span>
 
+namespace quicker_sfv {
+
 class FileOutput {
 public:
     virtual ~FileOutput() = 0;
@@ -31,5 +33,7 @@ public:
      */
     virtual size_t read(std::span<std::byte> read_buffer) = 0;
 };
+
+}
 
 #endif

@@ -4,11 +4,11 @@
 
 #include <ostream>
 
-std::ostream& operator<<(std::ostream& os, DecodeResult const& d) {
+std::ostream& operator<<(std::ostream& os, quicker_sfv::DecodeResult const& d) {
     return os << "Units consumed: " << d.code_units_consumed << ", Code point: " << static_cast<uint32_t>(d.code_point);
 }
 
-std::ostream& operator<<(std::ostream& os, Utf16Encode const& d) {
+std::ostream& operator<<(std::ostream& os, quicker_sfv::Utf16Encode const& d) {
     if (d.number_of_code_units == 1) {
         return os << "{" << static_cast<uint16_t>(d.encode[0]) << "}";
     } else if (d.number_of_code_units == 2) {
@@ -17,7 +17,7 @@ std::ostream& operator<<(std::ostream& os, Utf16Encode const& d) {
     return os << "Code units: " << d.number_of_code_units;
 }
 
-std::ostream& operator<<(std::ostream& os, Utf8Encode const& d) {
+std::ostream& operator<<(std::ostream& os, quicker_sfv::Utf8Encode const& d) {
     if (d.number_of_code_units == 1) {
         return os << "{" << static_cast<uint32_t>(d.encode[0]) << "}";
     } else if (d.number_of_code_units == 2) {
@@ -32,7 +32,11 @@ std::ostream& operator<<(std::ostream& os, Utf8Encode const& d) {
 
 TEST_CASE("Unicode")
 {
+    using quicker_sfv::DecodeResult;
+    using quicker_sfv::Utf8Encode;
+    using quicker_sfv::Utf16Encode;
     SECTION("Utf8 Decode") {
+        using quicker_sfv::decodeUtf8;
         CHECK(decodeUtf8(u8"") == DecodeResult{ .code_units_consumed = 1, .code_point = 0 });
         CHECK(decodeUtf8(u8"A") == DecodeResult{ .code_units_consumed = 1, .code_point = 65 });
         CHECK(decodeUtf8(u8" ") == DecodeResult{ .code_units_consumed = 1, .code_point = 32 });
@@ -54,6 +58,7 @@ TEST_CASE("Unicode")
         CHECK(decodeUtf8(biggest_code_point) == DecodeResult{ .code_units_consumed = 4, .code_point = 0x10ffff });
     }
     SECTION("Utf16 Decode") {
+        using quicker_sfv::decodeUtf16;
         CHECK(decodeUtf16(u"") == DecodeResult{ .code_units_consumed = 1, .code_point = 0 });
         CHECK(decodeUtf16(u"A") == DecodeResult{ .code_units_consumed = 1, .code_point = 65 });
         CHECK(decodeUtf16(u" ") == DecodeResult{ .code_units_consumed = 1, .code_point = 32 });
@@ -75,6 +80,7 @@ TEST_CASE("Unicode")
         CHECK(decodeUtf16(biggest_code_point) == DecodeResult{ .code_units_consumed = 2, .code_point = 0x10ffff });
     }
     SECTION("Encode Utf16") {
+        using quicker_sfv::encodeUtf32ToUtf16;
         CHECK(encodeUtf32ToUtf16(U'\0') == Utf16Encode{ .number_of_code_units = 1, .encode = { 0, 0 } });
         CHECK(encodeUtf32ToUtf16(U'A') == Utf16Encode{ .number_of_code_units = 1, .encode = { 65, 0 } });
         CHECK(encodeUtf32ToUtf16(U' ') == Utf16Encode{ .number_of_code_units = 1, .encode = { 32, 0 } });
@@ -93,6 +99,7 @@ TEST_CASE("Unicode")
         CHECK(encodeUtf32ToUtf16(char32_t{ 0x10ffff }) == Utf16Encode{ .number_of_code_units = 2, .encode = { 0xdbff, 0xdfff } });
     }
     SECTION("Encode Utf8") {
+        using quicker_sfv::encodeUtf32ToUtf8;
         CHECK(encodeUtf32ToUtf8(U'\0') == Utf8Encode{ .number_of_code_units = 1, .encode = { 0, 0, 0, 0 } });
         CHECK(encodeUtf32ToUtf8(U'A') == Utf8Encode{ .number_of_code_units = 1, .encode = { 65, 0, 0, 0 } });
         CHECK(encodeUtf32ToUtf8(U' ') == Utf8Encode{ .number_of_code_units = 1, .encode = { 32, 0, 0, 0 } });

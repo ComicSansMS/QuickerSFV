@@ -9,7 +9,6 @@
 
 namespace quicker_sfv {
 
-
 struct Version {
     int major;
     int minor;

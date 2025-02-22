@@ -12,7 +12,7 @@ inline constexpr size_t const READ_BUFFER_SIZE = 64 << 10;
 
 class FileReader {
 private:
-    FileInput* m_fileIn;
+    quicker_sfv::FileInput* m_fileIn;
     size_t m_bufferOffset;
     size_t m_fileOffset;
     bool m_eof;
@@ -21,7 +21,7 @@ private:
         std::vector<std::byte> back;
     } m_buffers;
 public:
-    explicit FileReader(FileInput& file_input) noexcept;
+    explicit FileReader(quicker_sfv::FileInput& file_input) noexcept;
 
     std::optional<std::u8string> read_line();
 
@@ -31,7 +31,7 @@ private:
     bool read_more();
 };
 
-FileReader::FileReader(FileInput& file_input) noexcept
+FileReader::FileReader(quicker_sfv::FileInput& file_input) noexcept
     :m_fileIn(&file_input), m_bufferOffset(0), m_fileOffset(0), m_eof(false),
      m_buffers{ .front = std::vector<std::byte>(READ_BUFFER_SIZE), .back = std::vector<std::byte>(READ_BUFFER_SIZE) }
 { }
@@ -42,7 +42,7 @@ bool FileReader::read_more() {
     m_bufferOffset -= READ_BUFFER_SIZE;
     std::swap(m_buffers.front, m_buffers.back);
     size_t const bytes_read = m_fileIn->read(m_buffers.back);
-    if (bytes_read == FileInput::RESULT_END_OF_FILE) {
+    if (bytes_read == quicker_sfv::FileInput::RESULT_END_OF_FILE) {
         m_eof = true;
         m_buffers.back.resize(0);
         return true;
@@ -84,7 +84,7 @@ std::optional<std::u8string> FileReader::read_line() {
         std::vector<std::byte> buffer;
         buffer.append_range(front_range);
         buffer.append_range(back_range);
-        if (!checkValidUtf8(buffer)) {
+        if (!quicker_sfv::checkValidUtf8(buffer)) {
             return std::nullopt;
         }
         m_bufferOffset += buffer.size() + 1;
@@ -103,7 +103,7 @@ std::optional<std::u8string> FileReader::read_line() {
         // line is fully contained within front buffer
         m_bufferOffset += std::distance(it_begin, it) + 1;
         std::span<std::byte> line_range{ it_begin, it };
-        if (!checkValidUtf8(line_range)) {
+        if (!quicker_sfv::checkValidUtf8(line_range)) {
             return std::nullopt;
         }
         if (!line_range.empty() && (line_range.back() == carriage_return)) { line_range = line_range.subspan(0, line_range.size() - 1); }
@@ -117,6 +117,7 @@ bool FileReader::done() const {
 }
 }
 
+namespace quicker_sfv {
 
 std::optional<SfvFile> SfvFile::readFromFile(FileInput& file_input) {
     SfvFile ret;
@@ -172,3 +173,4 @@ void SfvFile::addEntry(wchar_t const* utf16_zero_terminated, MD5Digest md5) {
     addEntry(std::u16string_view(reinterpret_cast<char16_t const*>(utf16_zero_terminated)), md5);
 }
 
+}

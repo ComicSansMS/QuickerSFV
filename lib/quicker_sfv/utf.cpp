@@ -2,6 +2,8 @@
 
 #include <span>
 
+namespace quicker_sfv {
+
 DecodeResult decodeUtf16(std::span<char16_t const> range) {
     constexpr DecodeResult const error = DecodeResult{ .code_units_consumed = 0, .code_point = 0 };
     enum State {
@@ -95,7 +97,7 @@ Utf16Encode encodeUtf32ToUtf16(char32_t c) {
         char32_t const tmp = c - 0x0001'0000;
         char16_t const low = static_cast<char16_t>(tmp & SURROGATE_MASK_LOW) | SURROGATE_HEADER_LOW;
         char16_t const high = static_cast<char16_t>((tmp & SURROGATE_MASK_HIGH) >> 10) | SURROGATE_HEADER_HIGH;
-        return Utf16Encode{ .number_of_code_units = 2, .encode = {high, low},  };
+        return Utf16Encode{ .number_of_code_units = 2, .encode = {high, low}, };
     }
     return Utf16Encode{ .number_of_code_units = 0, .encode = {} };
 }
@@ -173,7 +175,7 @@ Utf8Encode encodeUtf32ToUtf8(char32_t c) {
     } else if (c < 0x800) {
         return Utf8Encode{ .number_of_code_units = 2, .encode = {
             static_cast<char8_t>(((c >> 6)  & 0b0001'1111) | 0b1100'0000),
-            static_cast<char8_t>(( c        & 0b0011'1111) | 0b1000'0000)
+            static_cast<char8_t>((c        & 0b0011'1111) | 0b1000'0000)
         } };
     } else if (c < 0x10000) {
         return Utf8Encode{ .number_of_code_units = 3, .encode = {
@@ -239,3 +241,4 @@ std::wstring convertToWstring(std::u8string_view str) {
     return std::wstring(reinterpret_cast<wchar_t const*>(convertToUtf16(str).c_str()));
 }
 
+}

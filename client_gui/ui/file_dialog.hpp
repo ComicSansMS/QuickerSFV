@@ -6,7 +6,7 @@
 
 #include <atomic>
 
-namespace quicker_sfv_gui {
+namespace quicker_sfv::gui{
 
 class FileDialogEventHandler: public IFileDialogEvents {
 private:

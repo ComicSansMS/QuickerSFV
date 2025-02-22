@@ -5,6 +5,8 @@
 #include <string>
 #include <string_view>
 
+namespace quicker_sfv {
+
 struct MD5Digest {
     std::byte data[16];
     static MD5Digest fromString(std::string_view str);
@@ -16,4 +18,5 @@ struct MD5Digest {
     friend bool operator!=(MD5Digest const&, MD5Digest const&) = default;
 };
 
+}
 #endif

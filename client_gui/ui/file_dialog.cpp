@@ -2,7 +2,7 @@
 
 #include <cassert>
 
-namespace quicker_sfv_gui {
+namespace quicker_sfv::gui {
 
 FileDialogEventHandler::FileDialogEventHandler()
     :m_refCount(0)

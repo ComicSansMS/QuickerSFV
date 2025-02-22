@@ -5,6 +5,8 @@
 #include <array>
 #include <stdexcept>
 
+namespace quicker_sfv {
+
 struct MD5Hasher::Pimpl {
     MD5_CTX context;
 };
@@ -34,3 +36,4 @@ MD5Digest MD5Hasher::getDigest()
     return ret;
 }
 
+}

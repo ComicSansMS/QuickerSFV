@@ -6,6 +6,8 @@
 #include <memory>
 #include <span>
 
+namespace quicker_sfv {
+
 class MD5Hasher {
 private:
     struct Pimpl;
@@ -20,4 +22,5 @@ public:
     MD5Digest getDigest();
 };
 
+}
 #endif
