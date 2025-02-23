@@ -1,0 +1,9 @@
+QuickerSFV
+Copyright (C) 2025 Andreas Weis
+
+MD5 implementation is taken from OpenSSL:
+Copyright 1995-2020 The OpenSSL Project Authors.
+
+Vectorized CRC implementations are taken from Chromium's modified zlib implementation:
+Copyright 2017 The Chromium Authors
+Copyright (C) 1995-2022 Jean-loup Gailly and Mark Adler
