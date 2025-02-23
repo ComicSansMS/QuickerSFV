@@ -12,16 +12,5 @@ bool supportsAvx512();
 
 uint32_t crc32(char const* buffer, size_t buffer_size, uint32_t crc_start, bool use_avx512);
 
-namespace detail {
-uint32_t crc32_avx512_simd_(  /* AVX512+PCLMUL */
-    const unsigned char* buf,
-    size_t len,
-    uint32_t crc);
-
-uint32_t crc32_sse42_simd_(  /* SSE4.2+PCLMUL */
-    const unsigned char* buf,
-    size_t len,
-    uint32_t crc);
-}
 }
 #endif

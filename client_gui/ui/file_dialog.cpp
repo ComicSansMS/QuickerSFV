@@ -38,30 +38,42 @@ ULONG FileDialogEventHandler::Release() {
 }
 
 HRESULT FileDialogEventHandler::OnFileOk(IFileDialog* pfd) {
+    UNREFERENCED_PARAMETER(pfd);
     return S_OK;
 }
 
 HRESULT FileDialogEventHandler::OnFolderChanging(IFileDialog* pfd, IShellItem* psiFolder) {
+    UNREFERENCED_PARAMETER(pfd);
+    UNREFERENCED_PARAMETER(psiFolder);
     return S_OK;
 }
 
 HRESULT FileDialogEventHandler::OnFolderChange(IFileDialog* pfd) {
+    UNREFERENCED_PARAMETER(pfd);
     return S_OK;
 }
 
 HRESULT FileDialogEventHandler::OnSelectionChange(IFileDialog* pfd) {
+    UNREFERENCED_PARAMETER(pfd);
     return S_OK;
 }
 
 HRESULT FileDialogEventHandler::OnShareViolation(IFileDialog* pfd, IShellItem* psi, FDE_SHAREVIOLATION_RESPONSE* pResponse) {
+    UNREFERENCED_PARAMETER(pfd);
+    UNREFERENCED_PARAMETER(psi);
+    UNREFERENCED_PARAMETER(pResponse);
     return S_OK;
 }
 
 HRESULT FileDialogEventHandler::OnTypeChange(IFileDialog* pfd) {
+    UNREFERENCED_PARAMETER(pfd);
     return S_OK;
 }
 
 HRESULT FileDialogEventHandler::OnOverwrite(IFileDialog* pfd, IShellItem* psi, FDE_OVERWRITE_RESPONSE* pResponse) {
+    UNREFERENCED_PARAMETER(pfd);
+    UNREFERENCED_PARAMETER(psi);
+    UNREFERENCED_PARAMETER(pResponse);
     return S_OK;
 }
 

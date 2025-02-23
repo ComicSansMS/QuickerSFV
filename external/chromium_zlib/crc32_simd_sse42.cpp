@@ -10,7 +10,8 @@
  * crc32_sse42_simd_(): compute the crc32 of the buffer, where the buffer
  * length must be at least 64, and a multiple of 16.
  */
-#include <fast_crc32.hpp>
+#include <cstddef>
+#include <cstdint>
 
 #include <emmintrin.h>
 #include <smmintrin.h>

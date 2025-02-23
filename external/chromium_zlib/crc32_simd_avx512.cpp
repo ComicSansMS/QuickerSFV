@@ -14,7 +14,8 @@
  *  V. Gopal, E. Ozturk, et al., 2009, http://intel.ly/2ySEwL0
  */
 
-#include <fast_crc32.hpp>
+#include <cstddef>
+#include <cstdint>
 
 #include <emmintrin.h>
 #include <smmintrin.h>
@@ -40,13 +41,13 @@ uint32_t crc32_avx512_simd_(  /* AVX512+PCLMUL */
      * k4 = ( x ^ ( 512 - 32 ) mod P(x) << 32 )' << 1 = 0x01c6e41596
      */
     static const uint64_t alignas(64) k1k2[] = { 0x011542778a, 0x01322d1430,
-                                                0x011542778a, 0x01322d1430,
-                                                0x011542778a, 0x01322d1430,
-                                                0x011542778a, 0x01322d1430 };
+                                                 0x011542778a, 0x01322d1430,
+                                                 0x011542778a, 0x01322d1430,
+                                                 0x011542778a, 0x01322d1430 };
     static const uint64_t alignas(64) k3k4[] = { 0x0154442bd4, 0x01c6e41596,
-                                                0x0154442bd4, 0x01c6e41596,
-                                                0x0154442bd4, 0x01c6e41596,
-                                                0x0154442bd4, 0x01c6e41596 };
+                                                 0x0154442bd4, 0x01c6e41596,
+                                                 0x0154442bd4, 0x01c6e41596,
+                                                 0x0154442bd4, 0x01c6e41596 };
     static const uint64_t alignas(16) k5k6[] = { 0x01751997d0, 0x00ccaa009e };
     static const uint64_t alignas(16) k7k8[] = { 0x0163cd6124, 0x0000000000 };
     static const uint64_t alignas(16) poly[] = { 0x01db710641, 0x01f7011641 };
