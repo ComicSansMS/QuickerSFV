@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cassert>
 #include <cstring>
 #include <generator>
 #include <limits>
@@ -740,6 +741,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
                      LPSTR     lpCmdLine,
                      int       nCmdShow)
 {
+    assert(GetACP() == 65001);  // utf-8 codepage
     TCHAR const class_name[] = TEXT("quicker_sfv");
     TCHAR const window_title[] = TEXT("QuickerSFV");
 
