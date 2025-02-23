@@ -206,133 +206,30 @@ public:
     }
 };
 
-std::optional<U16Path> OpenFolder(HWND parent_window) {
-    CComPtr<IFileDialog> file_open_dialog = nullptr;
-    HRESULT hres = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&file_open_dialog));
-    if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error file open dialog"), TEXT("Error"), MB_ICONERROR);
-        return std::nullopt;
-    }
-    CComPtr<gui::FileDialogEventHandler> file_dialog_event_handler = gui::createFileDialogEventHandler();
-    DWORD cookie;
-    file_open_dialog->Advise(file_dialog_event_handler, &cookie);
-    if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error advising dialog event handler"), TEXT("Error"), MB_ICONERROR);
-        return std::nullopt;
-    }
-    AdviseGuard advise_guard{ file_open_dialog, cookie };
-    
-    FILEOPENDIALOGOPTIONS opts;
-    hres = file_open_dialog->GetOptions(&opts);
-    if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error retrieving file dialog options"), TEXT("Error"), MB_ICONERROR);
-        return std::nullopt;
-    }
-    opts |= FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_DONTADDTORECENT;
-    hres = file_open_dialog->SetOptions(opts);
-    if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error setting file dialog options"), TEXT("Error"), MB_ICONERROR);
-        return std::nullopt;
-    }
-    //file_open_dialog->SetTitle(TEXT("Select folder to create checksum file from"));
-    hres = file_open_dialog->Show(parent_window);
-    if (hres == S_OK) {
-        IShellItem* shell_result;
-        hres = file_open_dialog->GetResult(&shell_result);
-        if (hres != S_OK) {
-            MessageBox(nullptr, TEXT("Error retrieving file open result"), TEXT("Error"), MB_ICONERROR);
-            return std::nullopt;
-        }
-        LPWSTR filename;
-        hres = shell_result->GetDisplayName(SIGDN_FILESYSPATH, &filename);  // works always because FOS_FORCEFILESYSTEM above
-        if (hres != S_OK) {
-            MessageBox(nullptr, TEXT("Error retrieving file open result display name"), TEXT("Error"), MB_ICONERROR);
-            return std::nullopt;
-        }
-        U16Path ret{ filename };
-        ret.prependAbsolutePathToRemoveMaxPathLimit();
-        ret.append(L"*");
-        CoTaskMemFree(filename);
-        return ret;
-    }
-    return std::nullopt;
-}
 
 const COMDLG_FILTERSPEC g_FileTypes[] =
 {
     {L"File Verification Database", L"*.sfv;*.crc;*.txt;*.ckz;*.csv;*.par;*.md5"},
     {L"All Files",                  L"*.*"}
 };
-enum class FileType: UINT {
+
+enum class FileType : UINT {
     VerificationDB = 0,
-    AllFiles       = 1
+    AllFiles = 1
 };
 
-std::optional<U16Path> OpenFile(HWND parent_window) {
-    CComPtr<IFileDialog> file_open_dialog = nullptr;
-    HRESULT hres = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&file_open_dialog));
-    if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error file open dialog"), TEXT("Error"), MB_ICONERROR);
-        return std::nullopt;
-    }
-    CComPtr<gui::FileDialogEventHandler> file_dialog_event_handler = gui::createFileDialogEventHandler();
-    DWORD cookie;
-    file_open_dialog->Advise(file_dialog_event_handler, &cookie);
-    if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error advising dialog event handler"), TEXT("Error"), MB_ICONERROR);
-        return std::nullopt;
-    }
-    AdviseGuard advise_guard{ file_open_dialog, cookie };
+enum class FileDialogAction {
+    Open,
+    OpenFolder,
+    SaveAs,
+};
 
-    FILEOPENDIALOGOPTIONS opts;
-    hres = file_open_dialog->GetOptions(&opts);
-    if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error retrieving file dialog options"), TEXT("Error"), MB_ICONERROR);
-        return std::nullopt;
-    }
-    opts |= FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST;
-    hres = file_open_dialog->SetOptions(opts);
-    if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error setting file dialog options"), TEXT("Error"), MB_ICONERROR);
-        return std::nullopt;
-    }
-    hres = file_open_dialog->SetFileTypes(ARRAYSIZE(g_FileTypes), g_FileTypes);
-    if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error setting file dialog file types"), TEXT("Error"), MB_ICONERROR);
-        return std::nullopt;
-    }
-    hres = file_open_dialog->SetFileTypeIndex(static_cast<UINT>(FileType::VerificationDB));
-    if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error setting file dialog file type index"), TEXT("Error"), MB_ICONERROR);
-        return std::nullopt;
-    }
-    //file_open_dialog->SetTitle(TEXT("Select folder to create checksum file from"));
-    hres = file_open_dialog->Show(parent_window);
-    if (hres == S_OK) {
-        IShellItem* shell_result;
-        hres = file_open_dialog->GetResult(&shell_result);
-        if (hres != S_OK) {
-            MessageBox(nullptr, TEXT("Error retrieving file open result"), TEXT("Error"), MB_ICONERROR);
-            return std::nullopt;
-        }
-        LPWSTR filename;
-        hres = shell_result->GetDisplayName(SIGDN_FILESYSPATH, &filename);  // works always because FOS_FORCEFILESYSTEM above
-        if (hres != S_OK) {
-            MessageBox(nullptr, TEXT("Error retrieving file open result display name"), TEXT("Error"), MB_ICONERROR);
-            return std::nullopt;
-        }
-        U16Path ret{ filename };
-        CoTaskMemFree(filename);
-        return ret;
-    }
-    return std::nullopt;
-}
-
-std::optional<U16Path> SaveFile(HWND parent_window) {
+std::optional<U16Path> FileDialog(HWND parent_window, FileDialogAction action, LPCWSTR dialog_title) {
     CComPtr<IFileDialog> file_open_dialog = nullptr;
-    HRESULT hres = CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&file_open_dialog));
+    CLSID const dialog_clsid = (action == FileDialogAction::SaveAs) ? CLSID_FileSaveDialog : CLSID_FileOpenDialog;
+    HRESULT hres = CoCreateInstance(dialog_clsid, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&file_open_dialog));
     if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error file open dialog"), TEXT("Error"), MB_ICONERROR);
+        MessageBox(nullptr, TEXT("Error creating file dialog"), TEXT("Error"), MB_ICONERROR);
         return std::nullopt;
     }
     CComPtr<gui::FileDialogEventHandler> file_dialog_event_handler = gui::createFileDialogEventHandler();
@@ -351,42 +248,65 @@ std::optional<U16Path> SaveFile(HWND parent_window) {
         return std::nullopt;
     }
     opts |= FOS_FORCEFILESYSTEM;
+    if (action == FileDialogAction::Open) {
+        opts |= FOS_FILEMUSTEXIST;
+    } else if (action == FileDialogAction::OpenFolder) {
+        opts |= FOS_FORCEFILESYSTEM | FOS_PICKFOLDERS | FOS_DONTADDTORECENT;
+    }
     hres = file_open_dialog->SetOptions(opts);
     if (!SUCCEEDED(hres)) {
         MessageBox(nullptr, TEXT("Error setting file dialog options"), TEXT("Error"), MB_ICONERROR);
         return std::nullopt;
     }
-    hres = file_open_dialog->SetFileTypes(ARRAYSIZE(g_FileTypes), g_FileTypes);
-    if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error setting file dialog file types"), TEXT("Error"), MB_ICONERROR);
-        return std::nullopt;
+    if (action != FileDialogAction::OpenFolder) {
+        hres = file_open_dialog->SetFileTypes(ARRAYSIZE(g_FileTypes), g_FileTypes);
+        if (!SUCCEEDED(hres)) {
+            MessageBox(nullptr, TEXT("Error setting file dialog file types"), TEXT("Error"), MB_ICONERROR);
+            return std::nullopt;
+        }
+        hres = file_open_dialog->SetFileTypeIndex(static_cast<UINT>(FileType::VerificationDB));
+        if (!SUCCEEDED(hres)) {
+            MessageBox(nullptr, TEXT("Error setting file dialog file type index"), TEXT("Error"), MB_ICONERROR);
+            return std::nullopt;
+        }
     }
-    hres = file_open_dialog->SetFileTypeIndex(static_cast<UINT>(FileType::VerificationDB));
-    if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error setting file dialog file type index"), TEXT("Error"), MB_ICONERROR);
-        return std::nullopt;
+    if (dialog_title) {
+        file_open_dialog->SetTitle(dialog_title);
     }
-    //file_open_dialog->SetTitle(TEXT("Select folder to create checksum file from"));
     hres = file_open_dialog->Show(parent_window);
     if (hres == S_OK) {
         IShellItem* shell_result;
         hres = file_open_dialog->GetResult(&shell_result);
         if (hres != S_OK) {
-            MessageBox(nullptr, TEXT("Error retrieving file open result"), TEXT("Error"), MB_ICONERROR);
+            MessageBox(nullptr, TEXT("Error retrieving file dialog result"), TEXT("Error"), MB_ICONERROR);
             return std::nullopt;
         }
         LPWSTR filename;
         hres = shell_result->GetDisplayName(SIGDN_FILESYSPATH, &filename);  // works always because FOS_FORCEFILESYSTEM above
         if (hres != S_OK) {
-            MessageBox(nullptr, TEXT("Error retrieving file open result display name"), TEXT("Error"), MB_ICONERROR);
+            MessageBox(nullptr, TEXT("Error retrieving file dialog result display name"), TEXT("Error"), MB_ICONERROR);
             return std::nullopt;
         }
         U16Path ret{ filename };
         ret.prependAbsolutePathToRemoveMaxPathLimit();
+
         CoTaskMemFree(filename);
         return ret;
     }
     return std::nullopt;
+}
+
+std::optional<U16Path> OpenFolder(HWND parent_window) {
+    return FileDialog(parent_window, FileDialogAction::OpenFolder, nullptr);
+}
+
+
+std::optional<U16Path> OpenFile(HWND parent_window) {
+    return FileDialog(parent_window, FileDialogAction::Open, nullptr);
+}
+
+std::optional<U16Path> SaveFile(HWND parent_window) {
+    return FileDialog(parent_window, FileDialogAction::SaveAs, nullptr);
 }
 
 
@@ -491,6 +411,7 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 if (auto opt = OpenFolder(hWnd); opt) {
                     SfvFile sfv_file;
                     std::vector<U16Path> ps;
+                    opt->append(L"*");
                     U16Path const base_path{ opt->str() };
                     for (FileInfo const& info : iterateFiles(base_path.str())) {
                         sfv_file.addEntry(info.relative_path, hashFile(info.absolute_path, info.size));
@@ -771,7 +692,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
     MSG message;
     for (;;) {
-        BOOL bret = GetMessage(&message, nullptr, 0, 0);
+        BOOL const bret = GetMessage(&message, nullptr, 0, 0);
         if (bret == 0) {
             break;
         } else if (bret == -1) {
@@ -784,4 +705,3 @@ int APIENTRY WinMain(HINSTANCE hInstance,
     }
     return static_cast<int>(message.wParam);
 }
-
