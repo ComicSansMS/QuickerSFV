@@ -21,6 +21,9 @@ target_sources(quicker_sfv
     FILES
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/file_io.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/crc32.hpp
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/digest.hpp
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/error.hpp
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/hasher.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5_digest.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/quicker_sfv.hpp
@@ -29,6 +32,8 @@ target_sources(quicker_sfv
     PRIVATE
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/file_io.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/crc32.cpp
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/digest.cpp
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/error.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5_digest.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/quicker_sfv.cpp

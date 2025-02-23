@@ -1,4 +1,5 @@
 #include <quicker_sfv/md5.hpp>
+#include <quicker_sfv/error.hpp>
 
 #include <openssl/md5.h>
 
@@ -22,7 +23,7 @@ MD5Hasher::MD5Hasher()
 {
     SUPPRESS_DEPRECATED_WARNING();
     int res = MD5_Init(&m_impl->context);
-    if (res != 1) { throw std::runtime_error("Error initializing md5"); }
+    if (res != 1) { throw Exception(Error::HasherFailure); }
 }
 
 MD5Hasher::~MD5Hasher() = default;
@@ -31,7 +32,7 @@ void MD5Hasher::addData(std::span<char const> data)
 {
     SUPPRESS_DEPRECATED_WARNING();
     int res = MD5_Update(&m_impl->context, data.data(), data.size());
-    if (res != 1) { throw std::runtime_error("Error updating md5"); }
+    if (res != 1) { throw Exception(Error::HasherFailure); }
 }
 
 MD5Digest MD5Hasher::getDigest()
@@ -41,7 +42,7 @@ MD5Digest MD5Hasher::getDigest()
     MD5Digest ret;
     SUPPRESS_DEPRECATED_WARNING();
     int res = MD5_Final(reinterpret_cast<unsigned char*>(&ret.data), &m_impl->context);
-    if (res != 1) { throw std::runtime_error("Error finalizing md5"); }
+    if (res != 1) { throw Exception(Error::HasherFailure); }
     return ret;
 }
 
