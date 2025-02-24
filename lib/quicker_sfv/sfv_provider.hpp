@@ -1,0 +1,32 @@
+#ifndef INCLUDE_GUARD_QUICKER_SFV_SFV_PROVIDER_HPP
+#define INCLUDE_GUARD_QUICKER_SFV_SFV_PROVIDER_HPP
+
+#include <quicker_sfv/checksum_provider.hpp>
+#include <quicker_sfv/checksum_file.hpp>
+
+#include <string_view>
+#include <memory>
+
+namespace quicker_sfv {
+
+class SfvProvider : public ChecksumProvider {
+public:
+    friend ChecksumProviderPtr createSfvProvider();
+private:
+    SfvProvider();
+public:
+    ~SfvProvider() override;
+    [[nodiscard]] std::u8string_view fileExtensions() const override;
+    [[nodiscard]] std::u8string_view fileDescription() const override;
+    [[nodiscard]] HasherPtr createHasher() const override;
+    [[nodiscard]] Digest digestFromString(std::u8string_view str) const override;
+
+    [[nodiscard]] ChecksumFile readFromFile(FileInput& file_input) const override;
+    void serialize(FileOutput& file_output, ChecksumFile const& f) const override;
+};
+
+ChecksumProviderPtr createSfvProvider();
+
+}
+
+#endif

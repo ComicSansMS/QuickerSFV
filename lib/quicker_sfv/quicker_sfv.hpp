@@ -4,8 +4,8 @@
 #include <quicker_sfv/checksum_file.hpp>
 #include <quicker_sfv/error.hpp>
 #include <quicker_sfv/file_io.hpp>
-#include <quicker_sfv/md5_file.hpp>
-#include <quicker_sfv/sfv_file.hpp>
+#include <quicker_sfv/md5_provider.hpp>
+#include <quicker_sfv/sfv_provider.hpp>
 #include <quicker_sfv/utf.hpp>
 
 namespace quicker_sfv {

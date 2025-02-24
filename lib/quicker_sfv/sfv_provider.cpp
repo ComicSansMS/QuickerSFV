@@ -1,4 +1,4 @@
-#include <quicker_sfv/sfv_file.hpp>
+#include <quicker_sfv/sfv_provider.hpp>
 
 #include <quicker_sfv/crc32.hpp>
 #include <quicker_sfv/error.hpp>
@@ -6,35 +6,32 @@
 
 namespace quicker_sfv {
 
-ChecksumFilePtr createSfvFile() {
-    return ChecksumFilePtr(new SfvFile(), detail::ChecksumFilePtrDeleter{ [](ChecksumFile* p) { delete p; } });
+ChecksumProviderPtr createSfvProvider() {
+    return ChecksumProviderPtr(new SfvProvider, detail::ChecksumProviderPtrDeleter{ [](ChecksumProvider* p) { delete p; } });
 }
 
-SfvFile::SfvFile()
-{}
+SfvProvider::SfvProvider() = default;
+SfvProvider::~SfvProvider() = default;
 
-
-SfvFile::~SfvFile() = default;
-
-[[nodiscard]] std::u8string_view SfvFile::fileExtensions() const {
+[[nodiscard]] std::u8string_view SfvProvider::fileExtensions() const {
     return u8"*.sfv";
 }
 
-[[nodiscard]] std::u8string_view SfvFile::fileDescription() const {
+[[nodiscard]] std::u8string_view SfvProvider::fileDescription() const {
     return u8"Sfv File";
 }
 
-[[nodiscard]] HasherPtr SfvFile::createHasher() const {
+[[nodiscard]] HasherPtr SfvProvider::createHasher() const {
     return HasherPtr(new Crc32Hasher(), detail::HasherPtrDeleter{ [](Hasher* p) { delete p; } });
 }
 
-[[nodiscard]] Digest SfvFile::digestFromString(std::u8string_view str) const {
+[[nodiscard]] Digest SfvProvider::digestFromString(std::u8string_view str) const {
     return Crc32Hasher::digestFromString(str);
 }
 
-void SfvFile::readFromFile(FileInput& file_input) {
+[[nodiscard]] ChecksumFile SfvProvider::readFromFile(FileInput& file_input) const {
     LineReader reader(file_input);
-    std::vector<Entry> new_entries;
+    ChecksumFile ret;
     for (;;) {
         auto opt_line = reader.read_line();
         if (!opt_line) {
@@ -51,20 +48,14 @@ void SfvFile::readFromFile(FileInput& file_input) {
         std::size_t const separator_idx = line.size() - 8;
         if ((line[separator_idx - 1] != u8' ')) { throwException(Error::ParserError); }
         std::u8string_view filepath_sv = line.substr(0, separator_idx - 1);
-        new_entries.emplace_back(
-            std::u8string(filepath_sv),
-            Crc32Hasher::digestFromString(line.substr(separator_idx))
+        ret.addEntry(filepath_sv, Crc32Hasher::digestFromString(line.substr(separator_idx))
         );
     }
-    m_entries = std::move(new_entries);
+    return ret;
 }
 
-[[nodiscard]] std::span<const ChecksumFile::Entry> SfvFile::getEntries() const {
-    return m_entries;
-}
-
-void SfvFile::serialize(FileOutput& file_output) const {
-    for (auto const& e : m_entries) {
+void SfvProvider::serialize(FileOutput& file_output, ChecksumFile const& f) const {
+    for (auto const& e : f.getEntries()) {
         std::u8string out_str;
         out_str.reserve(e.path.size() + 11);
         out_str.append(e.path);
@@ -73,15 +64,6 @@ void SfvFile::serialize(FileOutput& file_output) const {
         out_str.push_back(u8'\n');
         file_output.write(std::span<std::byte const>(reinterpret_cast<std::byte const*>(out_str.data()), out_str.size()));
     }
-}
-
-void SfvFile::addEntry(std::u8string_view path, Digest digest) {
-    if (!Crc32Hasher::checkType(digest)) { throwException(Error::InvalidArgument); }
-    m_entries.emplace_back(std::u8string{ path }, digest);
-}
-
-void SfvFile::clear() {
-    m_entries.clear();
 }
 
 }

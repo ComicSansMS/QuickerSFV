@@ -114,12 +114,12 @@ std::u8string toUtf8(LPCWSTR z_str) {
 
 class FileProviders {
 private:
-    std::vector<quicker_sfv::ChecksumFilePtr> m_files;
+    std::vector<quicker_sfv::ChecksumProviderPtr> m_providers;
 public:
     FileProviders()
     {
-        m_files.emplace_back(quicker_sfv::createSfvFile());
-        m_files.emplace_back(quicker_sfv::createMD5File());
+        m_providers.emplace_back(quicker_sfv::createSfvProvider());
+        m_providers.emplace_back(quicker_sfv::createMD5Provider());
         // @todo:
         //  - .ckz
         //  - .par
@@ -127,9 +127,9 @@ public:
         //  - .txt
     }
 
-    ChecksumFile* getMatchingProviderFor(std::u8string_view filename) {
-        for (auto const& f: m_files) {
-            std::u8string_view exts = f->fileExtensions();
+    ChecksumProvider* getMatchingProviderFor(std::u8string_view filename) {
+        for (auto const& p: m_providers) {
+            std::u8string_view exts = p->fileExtensions();
             // split extensions
             
             for (std::u8string_view::size_type it = 0; it != std::u8string_view::npos;) {
@@ -138,7 +138,7 @@ public:
                 if (ext[0] == u8'*') {
                     ext = ext.substr(1);
                     if (filename.ends_with(ext)) {
-                        return f.get();
+                        return p.get();
                     }
                 } else {
                     assert(!"Invalid extension provided");
@@ -168,7 +168,7 @@ private:
     HIMAGELIST m_imageList;
 
     FileProviders* m_fileProviders;
-    ChecksumFile* m_checksumFile;
+    ChecksumFile m_checksumFile;
 public:
     explicit MainWindow(FileProviders& file_providers);
 
@@ -192,7 +192,7 @@ private:
 
 MainWindow::MainWindow(FileProviders& file_providers)
     :m_hInstance(nullptr), m_windowTitle(nullptr), m_hWnd(nullptr), m_hTextFieldLeft(nullptr), m_hTextFieldRight(nullptr),
-     m_hListView(nullptr), m_imageList(nullptr), m_fileProviders(&file_providers), m_checksumFile(nullptr)
+     m_hListView(nullptr), m_imageList(nullptr), m_fileProviders(&file_providers)
 {
 }
 
@@ -435,12 +435,10 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 return 0;
             } else if (LOWORD(wParam) == ID_FILE_OPEN) {
                 if (auto opt = OpenFile(hWnd); opt) {
-                    ChecksumFile* checksum_file = m_fileProviders->getMatchingProviderFor(toUtf8(opt->str()));
-                    if (checksum_file) {
+                    ChecksumProvider* checksum_provider = m_fileProviders->getMatchingProviderFor(toUtf8(opt->str()));
+                    if (checksum_provider) {
                         FileInputWin32 reader(opt->str());
-                        checksum_file->readFromFile(reader);
-                        if (m_checksumFile) { m_checksumFile->clear(); }
-                        m_checksumFile = checksum_file;
+                        m_checksumFile = checksum_provider->readFromFile(reader);
                     }
                 }
                 return 0;
@@ -455,23 +453,25 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 SetMenuItemInfo(m_hMenu, ID_OPTIONS_USEAVX512, FALSE, &mii);
 
             } else if ((LOWORD(wParam) == ID_CREATE_CRC) || (LOWORD(wParam) == ID_CREATE_MD5)) {
-                ChecksumFile* checksum_file = nullptr;
+                ChecksumProvider* checksum_provider = nullptr;
                 if (LOWORD(wParam) == ID_CREATE_MD5) {
-                    checksum_file = m_fileProviders->getMatchingProviderFor(u8"*.md5");
+                    checksum_provider = m_fileProviders->getMatchingProviderFor(u8"*.md5");
                 }
-                if (!checksum_file) { return 0; }
+                if (!checksum_provider) { return 0; }
                 if (auto opt = OpenFolder(hWnd); opt) {
+                    ChecksumFile new_file;
                     opt->append(L"*");
                     if (auto opt_s = SaveFile(hWnd); opt_s) {
                         std::vector<U16Path> ps;
                         U16Path const base_path{ opt->str() };
                         for (FileInfo const& info : iterateFiles(base_path.str())) {
-                            checksum_file->addEntry(toUtf8(info.relative_path),
-                                hashFile(checksum_file->createHasher(), info.absolute_path, info.size));
+                            new_file.addEntry(toUtf8(info.relative_path),
+                                hashFile(checksum_provider->createHasher(), info.absolute_path, info.size));
                         }
                         auto filename = opt_s->str();
                         FileOutputWin32 writer(filename);
-                        checksum_file->serialize(writer);
+                        new_file.sortEntries();
+                        checksum_provider->serialize(writer, new_file);
                     }
                 }
                 return 0;
