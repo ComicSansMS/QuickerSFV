@@ -8,15 +8,21 @@ namespace quicker_sfv {
 enum class Error {
     Failed,
     HasherFailure,
+    ParserError,
 };
 
 class Exception {
+private:
     Error m_error;
-public:
+private:
     explicit Exception(Error e) noexcept;
-
+public:
     std::u8string_view what8() const noexcept;
+
+    [[noreturn]] friend void throwException(Error e);
 };
+
+[[noreturn]] void throwException(Error e);
 
 }
 #endif

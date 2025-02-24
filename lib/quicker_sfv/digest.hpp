@@ -54,8 +54,8 @@ private:
 
     std::unique_ptr<Concept> m_digest;
 public:
-    template<typename T>
-    explicit Digest(T&& digest)
+    template<IsDigest T> requires( !std::is_same_v<std::remove_cvref_t<T>, Digest> )
+    Digest(T&& digest)
         :m_digest(std::make_unique<Model<std::remove_cvref_t<T>>>(std::forward<T>(digest)))
     {}
 

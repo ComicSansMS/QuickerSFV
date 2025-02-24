@@ -353,7 +353,7 @@ std::generator<FileInfo> iterateFiles(LPCWSTR path) {
     }
 }
 
-MD5Digest hashFile(LPCWSTR filepath, uint64_t filesize) {
+Digest hashFile(LPCWSTR filepath, uint64_t filesize) {
     HANDLE hin = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
     if (hin == INVALID_HANDLE_VALUE) {
         std::abort();
@@ -372,7 +372,7 @@ MD5Digest hashFile(LPCWSTR filepath, uint64_t filesize) {
     UnmapViewOfFile(fptr);
     CloseHandle(hmappedFile);
     CloseHandle(hin);
-    return hasher.getDigest();
+    return hasher.finalize();
 }
 
 LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {

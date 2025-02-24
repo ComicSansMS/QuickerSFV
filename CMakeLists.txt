@@ -28,16 +28,19 @@ target_sources(quicker_sfv
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5_digest.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/quicker_sfv.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/sfv_file.hpp
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/string_conversion.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/utf.hpp
     PRIVATE
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/file_io.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/crc32.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/digest.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/error.cpp
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/hasher.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5_digest.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/quicker_sfv.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/sfv_file.cpp
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/string_conversion.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/utf.cpp
 )
 if (MSVC)

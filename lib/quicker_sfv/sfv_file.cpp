@@ -1,6 +1,7 @@
 #include <quicker_sfv/sfv_file.hpp>
 
 #include <quicker_sfv/file_io.hpp>
+#include <quicker_sfv/md5.hpp>
 #include <quicker_sfv/utf.hpp>
 
 #include <algorithm>
@@ -122,6 +123,7 @@ namespace quicker_sfv {
 std::optional<SfvFile> SfvFile::readFromFile(FileInput& file_input) {
     SfvFile ret;
     FileReader reader(file_input);
+    MD5Hasher h;
     for (;;) {
         auto opt_line = reader.read_line();
         if (!opt_line) {
@@ -140,7 +142,7 @@ std::optional<SfvFile> SfvFile::readFromFile(FileInput& file_input) {
         std::u8string_view filepath_sv = line.substr(separator_idx + 1);
         ret.m_files.emplace_back(
             std::u8string(filepath_sv),
-            MD5Digest::fromString(line.substr(0, separator_idx))
+            h.digestFromString(line.substr(0, separator_idx))
         );
     }
     return ret;
@@ -161,16 +163,16 @@ void SfvFile::serialize(FileOutput& file_output) const {
     }
 }
 
-void SfvFile::addEntry(std::u8string_view p, MD5Digest md5) {
-    m_files.emplace_back(std::u8string{ p }, md5);
+void SfvFile::addEntry(std::u8string_view p, Digest md5) {
+    m_files.emplace_back(std::u8string{ p }, std::move(md5));
 }
 
-void SfvFile::addEntry(std::u16string_view p, MD5Digest md5) {
-    addEntry(convertToUtf8(p), md5);
+void SfvFile::addEntry(std::u16string_view p, Digest md5) {
+    addEntry(convertToUtf8(p), std::move(md5));
 }
 
-void SfvFile::addEntry(wchar_t const* utf16_zero_terminated, MD5Digest md5) {
-    addEntry(std::u16string_view(reinterpret_cast<char16_t const*>(utf16_zero_terminated)), md5);
+void SfvFile::addEntry(wchar_t const* utf16_zero_terminated, Digest md5) {
+    addEntry(std::u16string_view(reinterpret_cast<char16_t const*>(utf16_zero_terminated)), std::move(md5));
 }
 
 }

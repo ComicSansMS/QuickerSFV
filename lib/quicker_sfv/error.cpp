@@ -15,5 +15,8 @@ std::u8string_view Exception::what8() const noexcept {
     }
 }
 
+[[noreturn]] void throwException(Error e) {
+    throw Exception(e);
+}
 
 }
