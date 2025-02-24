@@ -5,6 +5,9 @@
 #include <atlbase.h>
 
 #include <atomic>
+#include <optional>
+#include <span>
+#include <string>
 
 namespace quicker_sfv::gui{
 
@@ -31,7 +34,21 @@ public:
 
 CComPtr<FileDialogEventHandler> createFileDialogEventHandler();
 
-}
 
+enum class FileType : UINT {
+    VerificationDB = 0,
+    AllFiles = 1
+};
+
+enum class FileDialogAction {
+    Open,
+    OpenFolder,
+    SaveAs,
+};
+
+std::optional<std::u16string> FileDialog(HWND parent_window, FileDialogAction action, 
+                                         LPCWSTR dialog_title, std::span<COMDLG_FILTERSPEC const> filter_types);
+
+}
 
 #endif

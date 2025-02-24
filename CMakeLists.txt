@@ -83,11 +83,13 @@ if(MSVC)
     target_sources(QuickerSFV
         PRIVATE
         ${PROJECT_SOURCE_DIR}/QuickerSFV.cpp
+        ${PROJECT_SOURCE_DIR}/client_gui/ui/enforce.cpp
         ${PROJECT_SOURCE_DIR}/client_gui/ui/file_dialog.cpp
         PRIVATE
         FILE_SET HEADERS
         BASE_DIRS ${PROJECT_SOURCE_DIR}/client_gui
         FILES
+        ${PROJECT_SOURCE_DIR}/client_gui/ui/enforce.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/ui/file_dialog.hpp
         PRIVATE
         ${PROJECT_SOURCE_DIR}/resource/quicker_sfv.rc
