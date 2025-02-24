@@ -30,6 +30,11 @@ using ChecksumProviderPtr = std::unique_ptr<ChecksumProvider, detail::ChecksumPr
 
 using ChecksumFileCreate = ChecksumProviderPtr const& (*)();
 
+struct HasherOptions {
+    bool has_sse42;
+    bool has_avx512;
+};
+
 class ChecksumProvider {
 public:
     ChecksumProvider& operator=(ChecksumProvider&&) = delete;
@@ -37,7 +42,7 @@ public:
     virtual ~ChecksumProvider() = 0;
     virtual [[nodiscard]] std::u8string_view fileExtensions() const = 0;
     virtual [[nodiscard]] std::u8string_view fileDescription() const = 0;
-    virtual [[nodiscard]] HasherPtr createHasher() const = 0;
+    virtual [[nodiscard]] HasherPtr createHasher(HasherOptions const& hasher_options) const = 0;
     virtual [[nodiscard]] Digest digestFromString(std::u8string_view str) const = 0;
 
     virtual ChecksumFile readFromFile(FileInput& file_input) const = 0;

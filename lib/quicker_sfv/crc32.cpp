@@ -50,6 +50,10 @@ Crc32Hasher::Crc32Hasher()
     :m_state(0), m_useAvx512(false)
 {}
 
+Crc32Hasher::Crc32Hasher(Crc32UseAvx512_T)
+    :m_state(0), m_useAvx512(true)
+{}
+
 Crc32Hasher::~Crc32Hasher() = default;
 
 void Crc32Hasher::addData(std::span<char const> data) {

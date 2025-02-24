@@ -23,7 +23,7 @@ MD5Provider::~MD5Provider() = default;
     return u8"MD5";
 }
 
-[[nodiscard]] HasherPtr MD5Provider::createHasher() const {
+[[nodiscard]] HasherPtr MD5Provider::createHasher(HasherOptions const&) const {
     return HasherPtr(new MD5Hasher, detail::HasherPtrDeleter{ [](Hasher* p) { delete p; } });
 }
 

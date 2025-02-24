@@ -49,13 +49,14 @@
 using namespace quicker_sfv;
 using quicker_sfv::gui::enforce;
 
-
+namespace {
 inline char16_t const* assumeUtf16(LPCWSTR z_str) {
     return reinterpret_cast<char16_t const*>(z_str);
 }
 
 inline LPCWSTR toWcharStr(char16_t const* z_str) {
     return reinterpret_cast<LPCWSTR>(z_str);
+}
 }
 
 class FileInputWin32 : public FileInput {
@@ -120,18 +121,21 @@ public:
     }
 };
 
-std::u8string toUtf8(LPCWSTR z_str) {
-    return quicker_sfv::convertToUtf8(std::u16string_view(assumeUtf16(z_str)));
-}
-
 class FileProviders {
 private:
     std::vector<quicker_sfv::ChecksumProviderPtr> m_providers;
+    struct FileType {
+        std::u8string extensions;
+        std::u8string description;
+    };
+    std::vector<FileType> m_fileTypes;
 public:
     FileProviders()
     {
         m_providers.emplace_back(quicker_sfv::createSfvProvider());
+        registerFileType(*m_providers.back());
         m_providers.emplace_back(quicker_sfv::createMD5Provider());
+        registerFileType(*m_providers.back());
         // @todo:
         //  - .ckz
         //  - .par
@@ -143,7 +147,6 @@ public:
         for (auto const& p: m_providers) {
             std::u8string_view exts = p->fileExtensions();
             // split extensions
-            
             for (std::u8string_view::size_type it = 0; it != std::u8string_view::npos;) {
                 auto const it_end = exts.find(u8';');
                 auto ext = exts.substr(it, it_end);
@@ -159,6 +162,14 @@ public:
             }
         }
         return nullptr;
+    }
+
+    std::span<FileType const> fileTypes() const {
+        return m_fileTypes;
+    }
+private:
+    void registerFileType(ChecksumProvider const& provider) {
+        m_fileTypes.emplace_back(std::u8string(provider.fileExtensions()), std::u8string(provider.fileDescription()));
     }
 };
 
@@ -208,20 +219,6 @@ MainWindow::MainWindow(FileProviders& file_providers)
 {
 }
 
-void appendWildcard(std::u16string& str) {
-    if (!str.empty() && str.back() == u'*') { str.pop_back(); }
-    if (!str.empty() && str.back() == u'\\') { str.pop_back(); }
-    str.append(u"\\*");
-}
-
-std::u16string relativePathTo(std::u16string_view p, std::u16string_view parent_path) {
-    std::u16string ret{ p };
-    auto it = std::mismatch(ret.begin(), ret.end(), parent_path.begin(), parent_path.end());
-    if (it.first != ret.end() && (*(it.first) == u'\\')) { ++it.first; }
-    ret.erase(ret.begin(), it.first);
-    return ret;
-}
-
 const COMDLG_FILTERSPEC g_FileTypes[] =
 {
     {L"File Verification Database", L"*.sfv;*.crc;*.txt;*.ckz;*.csv;*.par;*.md5"},
@@ -229,15 +226,15 @@ const COMDLG_FILTERSPEC g_FileTypes[] =
 };
 
 std::optional<std::u16string> OpenFolder(HWND parent_window) {
-    return gui::FileDialog(parent_window, gui::FileDialogAction::OpenFolder, nullptr, g_FileTypes);
+    return gui::FileDialog(parent_window, gui::FileDialogAction::OpenFolder, nullptr, {});
 }
 
 
-std::optional<std::u16string> OpenFile(HWND parent_window) {
+std::optional<std::u16string> OpenFile(HWND parent_window, FileProviders const& file_providers) {
     return gui::FileDialog(parent_window, gui::FileDialogAction::Open, nullptr, g_FileTypes);
 }
 
-std::optional<std::u16string> SaveFile(HWND parent_window) {
+std::optional<std::u16string> SaveFile(HWND parent_window, FileProviders const& file_providers) {
     return gui::FileDialog(parent_window, gui::FileDialogAction::SaveAs, nullptr, g_FileTypes);
 }
 
@@ -250,6 +247,18 @@ struct FileInfo {
 std::generator<FileInfo> iterateFiles(std::u16string const& base_path) {
     auto const is_dot = [](LPCWSTR p) -> bool { return p[0] == L'.' && p[1] == L'\0'; };
     auto const is_dotdot = [](LPCWSTR p) -> bool { return p[0] == L'.' && p[1] == L'.' && p[2] == L'\0'; };
+    auto const appendWildcard = [](std::u16string& str) {
+        if (!str.empty() && str.back() == u'*') { str.pop_back(); }
+        if (!str.empty() && str.back() == u'\\') { str.pop_back(); }
+        str.append(u"\\*");
+    };
+    auto const relativePathTo = [](std::u16string_view p, std::u16string_view parent_path) -> std::u16string {
+        std::u16string ret{ p };
+        auto it = std::mismatch(ret.begin(), ret.end(), parent_path.begin(), parent_path.end());
+        if (it.first != ret.end() && (*(it.first) == u'\\')) { ++it.first; }
+        ret.erase(ret.begin(), it.first);
+        return ret;
+    };
     std::vector<std::u16string> directories;
     directories.emplace_back(base_path);
     appendWildcard(directories.back());
@@ -317,7 +326,7 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 MessageBox(hWnd, TEXT("About this!"), TEXT("About QuickerSFV"), MB_ICONINFORMATION);
                 return 0;
             } else if (LOWORD(wParam) == ID_FILE_OPEN) {
-                if (auto opt = OpenFile(hWnd); opt) {
+                if (auto opt = OpenFile(hWnd, *m_fileProviders); opt) {
                     ChecksumProvider* checksum_provider = m_fileProviders->getMatchingProviderFor(convertToUtf8(*opt));
                     if (checksum_provider) {
                         FileInputWin32 reader(*opt);
@@ -343,10 +352,11 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 if (!checksum_provider) { return 0; }
                 if (auto const opt = OpenFolder(hWnd); opt) {
                     ChecksumFile new_file;
-                    if (auto const opt_s = SaveFile(hWnd); opt_s) {
+                    HasherOptions hasher_options{ .has_sse42 = true, .has_avx512 = false };
+                    if (auto const opt_s = SaveFile(hWnd, *m_fileProviders); opt_s) {
                         for (FileInfo const& info : iterateFiles(*opt)) {
                             new_file.addEntry(convertToUtf8(info.relative_path),
-                                hashFile(checksum_provider->createHasher(), info.absolute_path, info.size));
+                                hashFile(checksum_provider->createHasher(hasher_options), info.absolute_path, info.size));
                         }
                         FileOutputWin32 writer(*opt_s);
                         new_file.sortEntries();

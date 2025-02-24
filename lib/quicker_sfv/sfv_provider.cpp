@@ -21,7 +21,10 @@ SfvProvider::~SfvProvider() = default;
     return u8"Sfv File";
 }
 
-[[nodiscard]] HasherPtr SfvProvider::createHasher() const {
+[[nodiscard]] HasherPtr SfvProvider::createHasher(HasherOptions const& hasher_options) const {
+    if (hasher_options.has_avx512) {
+        return HasherPtr(new Crc32Hasher(Crc32UseAvx512_T{}), detail::HasherPtrDeleter{ [](Hasher* p) { delete p; } });
+    }
     return HasherPtr(new Crc32Hasher(), detail::HasherPtrDeleter{ [](Hasher* p) { delete p; } });
 }
 

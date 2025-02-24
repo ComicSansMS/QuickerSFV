@@ -7,12 +7,15 @@
 
 namespace quicker_sfv {
 
+struct Crc32UseAvx512_T {};
+
 class Crc32Hasher: public Hasher {
 private:
     uint32_t m_state;
     bool m_useAvx512;
 public:
     Crc32Hasher();
+    explicit Crc32Hasher(Crc32UseAvx512_T);
     ~Crc32Hasher() override;
     void addData(std::span<char const> data) override;
     Digest finalize() override;
