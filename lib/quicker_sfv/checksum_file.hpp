@@ -33,11 +33,11 @@ class ChecksumFile {
 public:
     struct Entry {
         std::u8string path;
-        Digest md5;
+        Digest digest;
     };
 public:
     virtual ~ChecksumFile() = 0;
-    virtual [[nodiscard]] std::u8string_view fileExtension() const = 0;
+    virtual [[nodiscard]] std::u8string_view fileExtensions() const = 0;
     virtual [[nodiscard]] std::u8string_view fileDescription() const = 0;
     virtual [[nodiscard]] HasherPtr createHasher() const = 0;
     virtual [[nodiscard]] Digest digestFromString(std::u8string_view str) const = 0;
@@ -48,7 +48,8 @@ public:
 
     virtual void serialize(FileOutput& file_output) const = 0;
 
-    virtual void addEntry(std::u8string_view p, Digest md5) = 0;
+    virtual void addEntry(std::u8string_view path, Digest digest) = 0;
+    virtual void clear() = 0;
 };
 
 }

@@ -16,7 +16,8 @@ public:
     ~Crc32Hasher() override;
     void addData(std::span<char const> data) override;
     Digest finalize() override;
-    Digest digestFromString(std::u8string_view str) const;
+    static Digest digestFromString(std::u8string_view str);
+    static bool checkType(Digest const& d);
 };
 
 }

@@ -60,7 +60,8 @@ Digest Crc32Hasher::finalize() {
     return CrcDigest{ m_state };
 }
 
-Digest Crc32Hasher::digestFromString(std::u8string_view str) const {
+/* static */
+Digest Crc32Hasher::digestFromString(std::u8string_view str) {
     if (str.size() != 8) { throwException(Error::ParserError); }
     auto conv = [](char8_t h, char8_t l) -> uint32_t {
         using string_conversion::hex_str_to_byte;
@@ -72,6 +73,10 @@ Digest Crc32Hasher::digestFromString(std::u8string_view str) const {
         (conv(str[4], str[5]) << 8) |
         conv(str[6], str[7]);
     return CrcDigest{ d };
+}
+
+/* static */ bool Crc32Hasher::checkType(Digest const& d) {
+    return d.checkType(typeid(CrcDigest));
 }
 
 }

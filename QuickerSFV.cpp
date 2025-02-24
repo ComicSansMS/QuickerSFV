@@ -108,6 +108,48 @@ public:
     }
 };
 
+std::u8string toUtf8(LPCWSTR z_str) {
+    return quicker_sfv::convertToUtf8(std::u16string_view(reinterpret_cast<char16_t const*>(z_str)));
+}
+
+class FileProviders {
+private:
+    std::vector<quicker_sfv::ChecksumFilePtr> m_files;
+public:
+    FileProviders()
+    {
+        m_files.emplace_back(quicker_sfv::createSfvFile());
+        m_files.emplace_back(quicker_sfv::createMD5File());
+        // @todo:
+        //  - .ckz
+        //  - .par
+        //  - .csv
+        //  - .txt
+    }
+
+    ChecksumFile* getMatchingProviderFor(std::u8string_view filename) {
+        for (auto const& f: m_files) {
+            std::u8string_view exts = f->fileExtensions();
+            // split extensions
+            
+            for (std::u8string_view::size_type it = 0; it != std::u8string_view::npos;) {
+                auto const it_end = exts.find(u8';');
+                auto ext = exts.substr(it, it_end);
+                if (ext[0] == u8'*') {
+                    ext = ext.substr(1);
+                    if (filename.ends_with(ext)) {
+                        return f.get();
+                    }
+                } else {
+                    assert(!"Invalid extension provided");
+                }
+                it = it_end;
+            }
+        }
+        return nullptr;
+    }
+};
+
 class MainWindow {
 private:
     HINSTANCE m_hInstance;
@@ -124,9 +166,11 @@ private:
     };
     std::vector<ListViewEntry> m_listEntries;
     HIMAGELIST m_imageList;
-    std::optional<SfvFile> m_sfvFile;
+
+    FileProviders* m_fileProviders;
+    ChecksumFile* m_checksumFile;
 public:
-    MainWindow();
+    explicit MainWindow(FileProviders& file_providers);
 
     MainWindow(MainWindow const&) = delete;
     MainWindow(MainWindow&&) = delete;
@@ -146,9 +190,9 @@ private:
     void resize();
 };
 
-MainWindow::MainWindow()
+MainWindow::MainWindow(FileProviders& file_providers)
     :m_hInstance(nullptr), m_windowTitle(nullptr), m_hWnd(nullptr), m_hTextFieldLeft(nullptr), m_hTextFieldRight(nullptr),
-     m_hListView(nullptr), m_imageList(nullptr)
+     m_hListView(nullptr), m_imageList(nullptr), m_fileProviders(&file_providers), m_checksumFile(nullptr)
 {
 }
 
@@ -353,7 +397,7 @@ std::generator<FileInfo> iterateFiles(LPCWSTR path) {
     }
 }
 
-Digest hashFile(LPCWSTR filepath, uint64_t filesize) {
+Digest hashFile(HasherPtr hasher, LPCWSTR filepath, uint64_t filesize) {
     HANDLE hin = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
     if (hin == INVALID_HANDLE_VALUE) {
         std::abort();
@@ -366,13 +410,12 @@ Digest hashFile(LPCWSTR filepath, uint64_t filesize) {
     if (!fptr) {
         std::abort();
     }
-    MD5Hasher hasher;
     std::span<char const> filespan{ reinterpret_cast<char const*>(fptr), (size_t)filesize };
-    hasher.addData(filespan);
+    hasher->addData(filespan);
     UnmapViewOfFile(fptr);
     CloseHandle(hmappedFile);
     CloseHandle(hin);
-    return hasher.finalize();
+    return hasher->finalize();
 }
 
 LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -392,9 +435,13 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 return 0;
             } else if (LOWORD(wParam) == ID_FILE_OPEN) {
                 if (auto opt = OpenFile(hWnd); opt) {
-                    FileInputWin32 reader(opt->str());
-                    std::optional<SfvFile> sfv_file = SfvFile::readFromFile(reader);
-                    SfvFile& f = *sfv_file;
+                    ChecksumFile* checksum_file = m_fileProviders->getMatchingProviderFor(toUtf8(opt->str()));
+                    if (checksum_file) {
+                        FileInputWin32 reader(opt->str());
+                        checksum_file->readFromFile(reader);
+                        if (m_checksumFile) { m_checksumFile->clear(); }
+                        m_checksumFile = checksum_file;
+                    }
                 }
                 return 0;
             } else if (LOWORD(wParam) == ID_OPTIONS_USEAVX512) {
@@ -408,18 +455,23 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 SetMenuItemInfo(m_hMenu, ID_OPTIONS_USEAVX512, FALSE, &mii);
 
             } else if ((LOWORD(wParam) == ID_CREATE_CRC) || (LOWORD(wParam) == ID_CREATE_MD5)) {
+                ChecksumFile* checksum_file = nullptr;
+                if (LOWORD(wParam) == ID_CREATE_MD5) {
+                    checksum_file = m_fileProviders->getMatchingProviderFor(u8"*.md5");
+                }
+                if (!checksum_file) { return 0; }
                 if (auto opt = OpenFolder(hWnd); opt) {
-                    SfvFile sfv_file;
-                    std::vector<U16Path> ps;
                     opt->append(L"*");
-                    U16Path const base_path{ opt->str() };
-                    for (FileInfo const& info : iterateFiles(base_path.str())) {
-                        sfv_file.addEntry(info.relative_path, hashFile(info.absolute_path, info.size));
-                    }
                     if (auto opt_s = SaveFile(hWnd); opt_s) {
+                        std::vector<U16Path> ps;
+                        U16Path const base_path{ opt->str() };
+                        for (FileInfo const& info : iterateFiles(base_path.str())) {
+                            checksum_file->addEntry(toUtf8(info.relative_path),
+                                hashFile(checksum_file->createHasher(), info.absolute_path, info.size));
+                        }
                         auto filename = opt_s->str();
                         FileOutputWin32 writer(filename);
-                        sfv_file.serialize(writer);
+                        checksum_file->serialize(writer);
                     }
                 }
                 return 0;
@@ -663,6 +715,9 @@ int APIENTRY WinMain(HINSTANCE hInstance,
                      int       nCmdShow)
 {
     assert(GetACP() == 65001);  // utf-8 codepage
+
+    FileProviders file_providers;
+
     TCHAR const class_name[] = TEXT("quicker_sfv");
     TCHAR const window_title[] = TEXT("QuickerSFV");
 
@@ -685,7 +740,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
         return 0;
     }
 
-    MainWindow main_window;
+    MainWindow main_window(file_providers);
     if (!main_window.createMainWindow(hInstance, nCmdShow, class_name, window_title)) {
         return 0;
     }

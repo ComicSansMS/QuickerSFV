@@ -91,8 +91,14 @@ Digest MD5Hasher::finalize()
     return ret;
 }
 
-Digest MD5Hasher::digestFromString(std::u8string_view str) const {
+/* static */
+Digest MD5Hasher::digestFromString(std::u8string_view str) {
     return MD5Digest::fromString(str);
+}
+
+/* static */
+bool MD5Hasher::checkType(Digest const& d) {
+    return d.checkType(typeid(MD5Digest));
 }
 
 }

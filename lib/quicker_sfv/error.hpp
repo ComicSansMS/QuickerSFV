@@ -9,6 +9,8 @@ enum class Error {
     Failed,
     HasherFailure,
     ParserError,
+    FileIO,
+    InvalidArgument,
 };
 
 class Exception {

@@ -28,6 +28,10 @@ std::u8string Digest::toString() const {
     return m_digest ? m_digest->toString() : u8"";
 }
 
+bool Digest::checkType(std::type_info const& ti) const {
+    return (m_digest) && (ti == m_digest->getType());
+}
+
 bool operator==(Digest const& lhs, Digest const& rhs) {
     if (!lhs.m_digest) {
         return !rhs.m_digest;

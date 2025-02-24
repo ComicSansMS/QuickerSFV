@@ -20,6 +20,7 @@ private:
         virtual std::unique_ptr<Concept> clone() const = 0;
         virtual std::u8string toString() const = 0;
         virtual bool equalTo(Concept const& rhs) const = 0;
+        virtual std::type_info const& getType() const = 0;
     };
 
     template<IsDigest T>
@@ -50,6 +51,10 @@ private:
             if (!mrhs) { return false; }
             return m_ == (mrhs->m_);
         }
+
+        std::type_info const& getType() const {
+            return typeid(T);
+        }
     };
 
     std::unique_ptr<Concept> m_digest;
@@ -67,6 +72,8 @@ public:
     Digest& operator=(Digest&& rhs);
 
     [[nodiscard]] std::u8string toString() const;
+
+    bool checkType(std::type_info const& ti) const;
 
     friend bool operator==(Digest const& lhs, Digest const& rhs);
     friend bool operator!=(Digest const& lhs, Digest const& rhs);
