@@ -66,7 +66,7 @@ public:
     Digest(Digest&& rhs);
     Digest& operator=(Digest&& rhs);
 
-    std::u8string toString() const;
+    [[nodiscard]] std::u8string toString() const;
 
     friend bool operator==(Digest const& lhs, Digest const& rhs);
     friend bool operator!=(Digest const& lhs, Digest const& rhs);

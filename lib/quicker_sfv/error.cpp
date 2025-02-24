@@ -7,12 +7,16 @@ Exception::Exception(Error e) noexcept
 {
 }
 
-std::u8string_view Exception::what8() const noexcept {
+[[nodiscard]] std::u8string_view Exception::what8() const noexcept {
     switch (m_error) {
     case Error::HasherFailure: [[fallthrough]];
     case Error::Failed: [[fallthrough]];
     default: return u8"Failed";
     }
+}
+
+[[nodiscard]] Error Exception::code() const noexcept {
+    return m_error;
 }
 
 [[noreturn]] void throwException(Error e) {

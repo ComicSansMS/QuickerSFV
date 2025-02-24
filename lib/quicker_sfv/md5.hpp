@@ -18,7 +18,7 @@ public:
     ~MD5Hasher() override;
     void addData(std::span<char const> data) override;
     Digest finalize() override;
-    Digest digestFromString(std::u8string_view str) const override;
+    Digest digestFromString(std::u8string_view str) const;
 };
 
 }

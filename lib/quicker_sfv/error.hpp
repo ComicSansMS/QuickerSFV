@@ -17,7 +17,9 @@ private:
 private:
     explicit Exception(Error e) noexcept;
 public:
-    std::u8string_view what8() const noexcept;
+    [[nodiscard]] std::u8string_view what8() const noexcept;
+
+    [[nodiscard]] Error code() const noexcept;
 
     [[noreturn]] friend void throwException(Error e);
 };
