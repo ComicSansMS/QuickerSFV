@@ -1,5 +1,7 @@
 #include <quicker_sfv/checksum_file.hpp>
 
+#include <quicker_sfv/error.hpp>
+
 #include <algorithm>
 
 namespace quicker_sfv {
@@ -9,6 +11,7 @@ namespace quicker_sfv {
 }
 
 void ChecksumFile::addEntry(std::u8string_view path, Digest digest) {
+    if (m_entries.size() >= 4'294'967'295) { throwException(Error::Failed); }
     m_entries.emplace_back(std::u8string(path), std::move(digest));
 }
 

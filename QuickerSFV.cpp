@@ -46,8 +46,180 @@
 #include <utility>
 #include <vector>
 
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+
 using namespace quicker_sfv;
 using quicker_sfv::gui::enforce;
+
+class EventHandler {
+public:
+    EventHandler& operator=(EventHandler&&) = delete;
+    virtual ~EventHandler() = 0;
+
+    enum class CompletionStatus {
+        Ok,
+        Missing,
+        Bad,
+    };
+    struct Result {
+        uint32_t total;
+        uint32_t ok;
+        uint32_t bad;
+        uint32_t missing;
+    };
+
+    virtual void on_check_started(uint32_t n_files) {}
+    virtual void on_progress(std::u8string_view file, uint32_t percentage) {}
+    virtual void on_file_completed(std::u8string_view file, CompletionStatus status) {}
+    virtual void on_check_completed(Result r) {}
+    virtual void on_cancel_requested() {}
+    virtual void on_canceled() {}
+    virtual void on_error(quicker_sfv::Error, std::u8string_view msg) {}
+};
+
+EventHandler::~EventHandler() = default;
+
+
+struct CreateOperation {
+    ChecksumFile output;
+    std::vector<std::u16string> paths_to_scan;
+    std::u16string target_file_path;
+};
+
+struct VerifyOperation {
+    EventHandler* event_handler;
+    HasherOptions options;
+    std::u16string source_file;
+    ChecksumProvider* provider;
+};
+
+struct CancelOperation {
+    EventHandler* event_handler;
+};
+
+struct Scheduler {
+private:
+    struct OperationState {
+        bool cancel_requested;
+        EventHandler* event_handler;
+        ChecksumProvider* checksum_provider;
+        enum Op {
+            Create,
+            Verify
+        } kind;
+        ChecksumFile checksum_file;
+        std::u16string checksum_path;
+        HasherPtr hasher;
+    };
+    std::vector<OperationState> m_opsQueue;
+    std::mutex m_mtxOps;
+    std::condition_variable m_cvOps;
+    bool m_shutdownRequested;
+    HANDLE m_cancelEvent;
+
+    struct Event {
+    };
+    std::vector<Event> m_eventsQueue;
+    std::mutex m_mtxEvents;
+
+    std::thread m_worker;
+public:
+    Scheduler();
+    ~Scheduler();
+    Scheduler& operator=(Scheduler&&) = delete;
+    void start();
+    void shutdown();
+    void run(EventHandler& event_handler);
+    void post(VerifyOperation op);
+    void post(CancelOperation op);
+private:
+    void worker();
+    void doVerify(OperationState& op);
+};
+
+Scheduler::Scheduler()
+    :m_shutdownRequested(false), m_cancelEvent(nullptr)
+{}
+
+Scheduler::~Scheduler() {
+    if (m_worker.joinable()) {
+        shutdown();
+    }
+    CloseHandle(m_cancelEvent);
+}
+
+void Scheduler::start() {
+    m_cancelEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+    if (!m_cancelEvent) {
+        // @todo catastrophic error
+    }
+    m_worker = std::thread([this]() { worker(); });
+}
+
+void Scheduler::shutdown() {
+    {
+        std::scoped_lock lk(m_mtxOps);
+        m_shutdownRequested = true;
+    }
+    m_cvOps.notify_all();
+    SetEvent(m_cancelEvent);
+    m_worker.join();
+}
+
+void Scheduler::run(EventHandler& event_handler) {
+    std::vector<Event> pending_events;
+    {
+        std::scoped_lock lk(m_mtxEvents);
+        swap(pending_events, m_eventsQueue);
+    }
+    for (auto const& e : pending_events) {
+
+    }
+}
+
+void Scheduler::post(VerifyOperation op) {
+    std::scoped_lock lk(m_mtxOps);
+    m_opsQueue.push_back(OperationState{
+        .cancel_requested = false,
+        .event_handler = op.event_handler,
+        .checksum_provider = op.provider,
+        .kind = OperationState::Op::Verify,
+        .checksum_file = ChecksumFile{},
+        .checksum_path = std::move(op.source_file),
+        .hasher = op.provider->createHasher(op.options)
+    });
+    m_cvOps.notify_one();
+}
+
+void Scheduler::post(CancelOperation op) {
+    SetEvent(m_cancelEvent);
+}
+
+void Scheduler::worker() {
+    std::vector<OperationState> pending_ops;
+    for (;;) {
+        {
+            std::unique_lock lk(m_mtxOps);
+            m_cvOps.wait(lk, [this]() { return m_shutdownRequested || !m_opsQueue.empty(); });
+            if (m_shutdownRequested) { break; }
+            pending_ops.clear();
+            swap(pending_ops, m_opsQueue);
+        }
+        for (auto& op : pending_ops) {
+            try {
+                switch (op.kind) {
+                case OperationState::Op::Verify:
+                    doVerify(op);
+                    break;
+                }
+            } catch (Exception& e) {
+                op.event_handler->on_error(e.code(), e.what8());
+            }
+        }
+    }
+}
 
 namespace {
 inline char16_t const* assumeUtf16(LPCWSTR z_str) {
@@ -83,7 +255,7 @@ public:
         if (m_eof) { return FileInput::RESULT_END_OF_FILE; }
         DWORD bytes_read = 0;
         if (!ReadFile(m_fin, read_buffer.data(), static_cast<DWORD>(read_buffer.size()), &bytes_read, nullptr)) {
-            std::abort();
+            quicker_sfv::throwException(Error::FileIO);
         }
         if (bytes_read == 0) {
             m_eof = true;
@@ -103,7 +275,7 @@ public:
         m_fout = CreateFile(toWcharStr(filename.c_str()), GENERIC_WRITE, FILE_SHARE_READ, nullptr,
                             CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (m_fout == INVALID_HANDLE_VALUE) {
-            std::abort();
+            throwException(Error::FileIO);
         }
     }
 
@@ -115,11 +287,182 @@ public:
         if (bytes_to_write.size() >= std::numeric_limits<DWORD>::max()) { std::abort(); }
         DWORD bytes_written = 0;
         if (!WriteFile(m_fout, bytes_to_write.data(), static_cast<DWORD>(bytes_to_write.size()), &bytes_written, nullptr)) {
-            return 0;
+            throwException(Error::FileIO);
         }
         return bytes_written;
     }
 };
+
+class HandleGuard {
+private:
+    HANDLE h;
+public:
+    explicit HandleGuard(HANDLE handle) :h(handle) {}
+    ~HandleGuard() { CloseHandle(h); }
+    HandleGuard& operator=(HandleGuard&&) = delete;
+};
+
+void Scheduler::doVerify(OperationState& op) {
+    auto const offsetLow = [](size_t i) -> DWORD { return static_cast<DWORD>(i & 0xffffffffull); };
+    auto const offsetHigh = [](size_t i) -> DWORD { return static_cast<DWORD>((i >> 32ull) & 0xffffffffull); };
+
+    std::u16string const base_path = [](std::u16string_view checksum_file_path) -> std::u16string {
+        auto it_slash = std::find(checksum_file_path.rbegin(), checksum_file_path.rend(), u'\\').base();
+        return std::u16string{ checksum_file_path.substr(0, std::distance(checksum_file_path.begin(), it_slash)) };
+    }(op.checksum_path);
+
+    constexpr DWORD const BUFFER_SIZE = 4 << 20;
+    FileInputWin32 reader(op.checksum_path);
+    op.checksum_file = op.checksum_provider->readFromFile(reader);
+    EventHandler::Result result{};
+    result.total = static_cast<uint32_t>(op.checksum_file.getEntries().size());
+    op.event_handler->on_check_started(result.total);
+
+    HANDLE event_front = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    if (!event_front) {
+        // catastrophic error
+        throwException(Error::Failed);
+    }
+    HandleGuard guard_event_front(event_front);
+    HANDLE event_back = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    if (!event_back) {
+        // catastrophic error
+        throwException(Error::Failed);
+    }
+    HandleGuard guard_event_back(event_back);
+
+    std::vector<char> front_buffer;
+    front_buffer.resize(BUFFER_SIZE);
+    std::vector<char> back_buffer;
+    back_buffer.resize(BUFFER_SIZE);
+
+    for (auto const& f : op.checksum_file.getEntries()) {
+        op.hasher->reset();
+
+        std::u16string const file_path = base_path + convertToUtf16(f.path);
+        HANDLE fin = CreateFile(toWcharStr(file_path.c_str()), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                                OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED | FILE_FLAG_NO_BUFFERING,
+                                nullptr);
+        if (fin == INVALID_HANDLE_VALUE) {
+            // file missing
+            ++result.missing;
+            op.event_handler->on_file_completed(f.path, EventHandler::CompletionStatus::Missing);
+            continue;
+        }
+        HandleGuard guard_fin(fin);
+
+        size_t read_offset = 0;
+        size_t bytes_hashed = 0;
+        bool is_eof = false;
+        bool is_canceled = false;
+        bool is_error = false;
+        size_t const file_size = [&is_error, fin]() -> size_t {
+            LARGE_INTEGER l_file_size;
+            if (!GetFileSizeEx(fin, &l_file_size)) {
+                is_error = true;
+                return 0;
+            }
+            return l_file_size.QuadPart;
+        }();
+
+        bool front_pending = false;
+        bool back_pending = false;
+        OVERLAPPED overlapped_storage[2] = {};
+        LPOVERLAPPED overlapped_front = &overlapped_storage[0];
+        LPOVERLAPPED overlapped_back = &overlapped_storage[1];
+        *overlapped_front = OVERLAPPED{
+            .Offset = offsetLow(read_offset),
+            .OffsetHigh = offsetHigh(read_offset),
+            .hEvent = event_front
+        };
+        if (!ReadFile(fin, front_buffer.data(), BUFFER_SIZE, nullptr, overlapped_front)) {
+            DWORD const err = GetLastError();
+            if (err == ERROR_HANDLE_EOF) {
+                // eof before async
+                is_eof = true;
+            } else if (err == ERROR_IO_PENDING) {
+                front_pending = true;
+            } else {
+                // file read error
+                is_error = true;
+                break;
+            }
+        }
+        read_offset += front_buffer.size();
+        while (!is_eof && !is_canceled && !is_error) {
+            *overlapped_back = OVERLAPPED{
+                    .Offset = offsetLow(read_offset),
+                    .OffsetHigh = offsetHigh(read_offset),
+                    .hEvent = event_back
+            };
+            if (!ReadFile(fin, back_buffer.data(), BUFFER_SIZE, nullptr, overlapped_back)) {
+                DWORD const err = GetLastError();
+                if (err == ERROR_HANDLE_EOF) {
+                    // eof before async
+                    is_eof = true;
+                } else if (err == ERROR_IO_PENDING) {
+                    back_pending = true;
+                } else {
+                    // file read error
+                    is_error = true;
+                    break;
+                }
+            }
+            read_offset += front_buffer.size();
+
+            DWORD bytes_read = 0;
+            HANDLE event_handles[] = { event_front, m_cancelEvent };
+            DWORD const wait_ret = WaitForMultipleObjects(2, event_handles, FALSE, INFINITE);
+            if (wait_ret == WAIT_OBJECT_0) {
+                // read successful
+                front_pending = false;
+                if (!GetOverlappedResult(fin, overlapped_front, &bytes_read, FALSE)) {
+                    if (GetLastError() == ERROR_HANDLE_EOF) {
+                        // eof
+                        is_eof = true;
+                    } else {
+                        // file read error
+                        is_error = true;
+                        break;
+                    }
+                }
+            } else if (wait_ret == WAIT_OBJECT_0 + 1) {
+                // cancel
+                CancelIo(fin);
+                is_canceled = true;
+                break;
+            } else {
+                // catastrophic error: unexpected wait result
+                throwException(Error::Failed);
+            }
+
+            op.hasher->addData(std::span<char const>(front_buffer.data(), bytes_read));
+            bytes_hashed += bytes_read;
+            op.event_handler->on_progress(f.path, static_cast<uint32_t>(bytes_hashed * 10000 / file_size));
+
+            std::swap(front_buffer, back_buffer);
+            std::swap(event_front, event_back);
+            std::swap(overlapped_front, overlapped_back);
+            std::swap(front_pending, back_pending);
+        }
+        if (front_pending) { WaitForSingleObject(event_front, INFINITE); GetOverlappedResult(fin, overlapped_front, nullptr, TRUE); }
+        if (back_pending) { WaitForSingleObject(event_back, INFINITE); GetOverlappedResult(fin, overlapped_back, nullptr, TRUE); }
+        if (is_canceled) {
+            op.event_handler->on_canceled();
+            return;
+        }
+        auto const digest = op.hasher->finalize();
+        if (digest == f.digest) {
+            op.event_handler->on_file_completed(f.path, EventHandler::CompletionStatus::Ok);
+            ++result.ok;
+        } else {
+            op.event_handler->on_file_completed(f.path, EventHandler::CompletionStatus::Bad);
+            ++result.bad;
+        }
+    }
+    op.event_handler->on_check_completed(result);
+}
+
 
 class FileProviders {
 private:
@@ -173,7 +516,7 @@ private:
     }
 };
 
-class MainWindow {
+class MainWindow: public EventHandler {
 private:
     HINSTANCE m_hInstance;
     TCHAR const* m_windowTitle;
@@ -190,10 +533,14 @@ private:
     std::vector<ListViewEntry> m_listEntries;
     HIMAGELIST m_imageList;
 
+    HasherOptions m_options;
     FileProviders* m_fileProviders;
     ChecksumFile m_checksumFile;
+    Scheduler* m_scheduler;
 public:
-    explicit MainWindow(FileProviders& file_providers);
+    explicit MainWindow(FileProviders& file_providers, Scheduler& scheduler);
+
+    ~MainWindow() override;
 
     MainWindow(MainWindow const&) = delete;
     MainWindow(MainWindow&&) = delete;
@@ -213,11 +560,14 @@ private:
     void resize();
 };
 
-MainWindow::MainWindow(FileProviders& file_providers)
+MainWindow::MainWindow(FileProviders& file_providers, Scheduler& scheduler)
     :m_hInstance(nullptr), m_windowTitle(nullptr), m_hWnd(nullptr), m_hTextFieldLeft(nullptr), m_hTextFieldRight(nullptr),
-     m_hListView(nullptr), m_imageList(nullptr), m_fileProviders(&file_providers)
+     m_hListView(nullptr), m_imageList(nullptr),
+     m_options{ .has_sse42 = true, .has_avx512 = false}, m_fileProviders(&file_providers), m_scheduler(&scheduler)
 {
 }
+
+MainWindow::~MainWindow() = default;
 
 const COMDLG_FILTERSPEC g_FileTypes[] =
 {
@@ -329,8 +679,12 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 if (auto opt = OpenFile(hWnd, *m_fileProviders); opt) {
                     ChecksumProvider* checksum_provider = m_fileProviders->getMatchingProviderFor(convertToUtf8(*opt));
                     if (checksum_provider) {
-                        FileInputWin32 reader(*opt);
-                        m_checksumFile = checksum_provider->readFromFile(reader);
+                        m_scheduler->post(VerifyOperation{
+                            .event_handler = this,
+                            .options = m_options,
+                            .source_file = *opt,
+                            .provider = checksum_provider
+                        });
                     }
                 }
                 return 0;
@@ -339,11 +693,12 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 GetMenuItemInfo(m_hMenu, ID_OPTIONS_USEAVX512, FALSE, &mii);
                 if ((mii.fState & MFS_CHECKED) != 0) {
                     mii.fState &= ~MFS_CHECKED;
+                    m_options.has_avx512 = false;
                 } else {
                     mii.fState |= MFS_CHECKED;
+                    m_options.has_avx512 = true;
                 }
                 SetMenuItemInfo(m_hMenu, ID_OPTIONS_USEAVX512, FALSE, &mii);
-
             } else if ((LOWORD(wParam) == ID_CREATE_CRC) || (LOWORD(wParam) == ID_CREATE_MD5)) {
                 ChecksumProvider* checksum_provider = nullptr;
                 if (LOWORD(wParam) == ID_CREATE_MD5) {
@@ -629,13 +984,16 @@ int APIENTRY WinMain(HINSTANCE hInstance,
         return 0;
     }
 
-    MainWindow main_window(file_providers);
+    Scheduler scheduler;
+    MainWindow main_window(file_providers, scheduler);
     if (!main_window.createMainWindow(hInstance, nCmdShow, class_name, window_title)) {
         return 0;
     }
 
+    scheduler.start();
     MSG message;
     for (;;) {
+        scheduler.run(main_window);
         BOOL const bret = GetMessage(&message, nullptr, 0, 0);
         if (bret == 0) {
             break;
@@ -647,5 +1005,6 @@ int APIENTRY WinMain(HINSTANCE hInstance,
             DispatchMessage(&message);
         }
     }
+    scheduler.shutdown();
     return static_cast<int>(message.wParam);
 }

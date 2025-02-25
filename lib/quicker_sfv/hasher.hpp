@@ -15,6 +15,7 @@ public:
     Hasher& operator=(Hasher&&) = delete;
     virtual void addData(std::span<char const> data) = 0;
     virtual Digest finalize() = 0;
+    virtual void reset() = 0;
 };
 
 }

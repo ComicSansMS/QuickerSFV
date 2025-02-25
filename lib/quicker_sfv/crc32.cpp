@@ -64,6 +64,10 @@ Digest Crc32Hasher::finalize() {
     return CrcDigest{ m_state };
 }
 
+void Crc32Hasher::reset() {
+    m_state = 0;
+}
+
 /* static */
 Digest Crc32Hasher::digestFromString(std::u8string_view str) {
     if (str.size() != 8) { throwException(Error::ParserError); }

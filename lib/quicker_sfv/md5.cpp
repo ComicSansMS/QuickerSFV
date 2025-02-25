@@ -67,9 +67,7 @@ struct MD5Hasher::Pimpl {
 MD5Hasher::MD5Hasher()
     :m_impl(std::make_unique<Pimpl>())
 {
-    SUPPRESS_DEPRECATED_WARNING();
-    int res = MD5_Init(&m_impl->context);
-    if (res != 1) { throwException(Error::HasherFailure); }
+    reset();
 }
 
 MD5Hasher::~MD5Hasher() = default;
@@ -89,6 +87,12 @@ Digest MD5Hasher::finalize()
     int res = MD5_Final(reinterpret_cast<unsigned char*>(&ret.data), &m_impl->context);
     if (res != 1) { throwException(Error::HasherFailure); }
     return ret;
+}
+
+void MD5Hasher::reset() {
+    SUPPRESS_DEPRECATED_WARNING();
+    int res = MD5_Init(&m_impl->context);
+    if (res != 1) { throwException(Error::HasherFailure); }
 }
 
 /* static */
