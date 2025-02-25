@@ -55,6 +55,8 @@
 using namespace quicker_sfv;
 using quicker_sfv::gui::enforce;
 
+constexpr UINT const WM_SCHEDULER_WAKEUP = WM_USER + 1;
+
 class EventHandler {
 public:
     EventHandler& operator=(EventHandler&&) = delete;
@@ -152,6 +154,7 @@ private:
     std::mutex m_mtxEvents;
 
     std::thread m_worker;
+    DWORD m_startingThreadId;
 public:
     Scheduler();
     ~Scheduler();
@@ -194,6 +197,7 @@ Scheduler::~Scheduler() {
 }
 
 void Scheduler::start() {
+    m_startingThreadId = GetCurrentThreadId();
     m_cancelEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
     if (!m_cancelEvent) {
         // @todo catastrophic error
@@ -282,7 +286,15 @@ std::u16string resolvePath(std::u16string const& path) {
     delete buffer;
     return ret;
 }
+
+LPCTSTR formatString(LPWSTR out_buffer, size_t buffer_size, LPCTSTR format, ...) {
+    va_list args;
+    va_start(args, format);
+    HRESULT hres = StringCchVPrintfW(out_buffer, buffer_size, format, args);
+    va_end(args);
+    return out_buffer;
 }
+} // anonymous namespace
 
 class FileInputWin32 : public FileInput {
 private:
@@ -389,6 +401,8 @@ void Scheduler::doVerify(OperationState& op) {
     std::vector<char> back_buffer;
     back_buffer.resize(BUFFER_SIZE);
 
+    uint32_t last_progress = 0;
+
     for (auto const& f : op.checksum_file.getEntries()) {
         op.hasher->reset();
 
@@ -491,7 +505,11 @@ void Scheduler::doVerify(OperationState& op) {
 
             op.hasher->addData(std::span<char const>(front_buffer.data(), bytes_read));
             bytes_hashed += bytes_read;
-            signalProgress(op.event_handler, f.path, static_cast<uint32_t>(bytes_hashed * 10000 / file_size));
+            uint32_t current_progress = static_cast<uint32_t>(bytes_hashed * 100 / file_size);
+            if (current_progress != last_progress) {
+                signalProgress(op.event_handler, f.path, current_progress);
+                last_progress = current_progress;
+            }
 
             std::swap(front_buffer, back_buffer);
             std::swap(event_front, event_back);
@@ -535,6 +553,7 @@ void Scheduler::signalProgress(EventHandler* recipient, std::u8string_view file,
             .percentage = percentage
         }
     });
+    PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
 }
 
 void Scheduler::signalFileCompleted(EventHandler* recipient, std::u8string_view file, Digest checksum, EventHandler::CompletionStatus status) {
@@ -547,6 +566,7 @@ void Scheduler::signalFileCompleted(EventHandler* recipient, std::u8string_view 
             .status = status
         }
     });
+    PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
 }
 
 void Scheduler::signalCheckCompleted(EventHandler* recipient, EventHandler::Result r) {
@@ -557,6 +577,7 @@ void Scheduler::signalCheckCompleted(EventHandler* recipient, EventHandler::Resu
             .r = r
         }
     });
+    PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
 }
 
 void Scheduler::signalCancelRequested(EventHandler* recipient) {
@@ -566,6 +587,7 @@ void Scheduler::signalCancelRequested(EventHandler* recipient) {
         .event = Event::ECancelRequested {
         }
     });
+    PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
 }
 
 void Scheduler::signalCanceled(EventHandler* recipient)  {
@@ -575,6 +597,7 @@ void Scheduler::signalCanceled(EventHandler* recipient)  {
         .event = Event::ECanceled {
         }
     });
+    PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
 }
 
 void Scheduler::signalError(EventHandler* recipient, quicker_sfv::Error error, std::u8string_view msg) {
@@ -586,6 +609,7 @@ void Scheduler::signalError(EventHandler* recipient, quicker_sfv::Error error, s
             .msg = std::u8string(msg)
         }
     });
+    PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
 }
 
 void Scheduler::dispatchEvent(EventHandler* recipient, Event::ECheckStarted const& e) {
@@ -840,6 +864,7 @@ Digest hashFile(HasherPtr hasher, LPCWSTR filepath, uint64_t filesize) {
 
 LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (msg == WM_DESTROY) {
+        m_scheduler->post(CancelOperation{});
         PostQuitMessage(0);
         return 0;
     } else if (msg == WM_CREATE) {
@@ -1197,19 +1222,12 @@ void MainWindow::onError(quicker_sfv::Error error, std::u8string_view msg) {
 void MainWindow::UpdateStats() {
     TCHAR buffer[50];
     constexpr size_t const buffer_size = ARRAYSIZE(buffer);
-    auto format = [&buffer](LPCTSTR format, ...) -> LPCTSTR {
-        va_list args;
-        va_start(args, format);
-        HRESULT hres = StringCchVPrintf(buffer, buffer_size, format, args);
-        va_end(args);
-        return buffer;
-    };
     if (m_stats.progress == 0) {
-        Static_SetText(m_hTextFieldLeft, format(TEXT("Completed files: %d/%d\nOk: %d"), m_stats.completed, m_stats.total, m_stats.ok));
+        Static_SetText(m_hTextFieldLeft, formatString(buffer, buffer_size, TEXT("Completed files: %d/%d\nOk: %d"), m_stats.completed, m_stats.total, m_stats.ok));
     } else {
-        Static_SetText(m_hTextFieldLeft, format(TEXT("Completed files: %d/%d (File: %d%%)\nOk: %d"), m_stats.completed, m_stats.total, m_stats.progress / 100, m_stats.ok));
+        Static_SetText(m_hTextFieldLeft, formatString(buffer, buffer_size, TEXT("Completed files: %d/%d (File: %d%%)\nOk: %d"), m_stats.completed, m_stats.total, m_stats.progress, m_stats.ok));
     }
-    Static_SetText(m_hTextFieldRight, format(TEXT("Bad: %d\nMissing: %d"), m_stats.bad, m_stats.missing));
+    Static_SetText(m_hTextFieldRight, formatString(buffer, buffer_size, TEXT("Bad: %d\nMissing: %d"), m_stats.bad, m_stats.missing));
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
