@@ -31,6 +31,7 @@
 #include <atlbase.h>
 #include <CommCtrl.h>
 #include <ShObjIdl_core.h>
+#include <strsafe.h>
 #include <tchar.h>
 #include <uxtheme.h>
 
@@ -44,6 +45,7 @@
 #include <memory>
 #include <optional>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <condition_variable>
@@ -70,13 +72,13 @@ public:
         uint32_t missing;
     };
 
-    virtual void on_check_started(uint32_t n_files) {}
-    virtual void on_progress(std::u8string_view file, uint32_t percentage) {}
-    virtual void on_file_completed(std::u8string_view file, CompletionStatus status) {}
-    virtual void on_check_completed(Result r) {}
-    virtual void on_cancel_requested() {}
-    virtual void on_canceled() {}
-    virtual void on_error(quicker_sfv::Error, std::u8string_view msg) {}
+    virtual void onCheckStarted(uint32_t n_files) = 0;
+    virtual void onProgress(std::u8string_view file, uint32_t percentage) = 0;
+    virtual void onFileCompleted(std::u8string_view file, Digest const& checksum, CompletionStatus status) = 0;
+    virtual void onCheckCompleted(Result r) = 0;
+    virtual void onCancelRequested() = 0;
+    virtual void onCanceled() = 0;
+    virtual void onError(quicker_sfv::Error error, std::u8string_view msg) = 0;
 };
 
 EventHandler::~EventHandler() = default;
@@ -120,6 +122,31 @@ private:
     HANDLE m_cancelEvent;
 
     struct Event {
+        struct ECheckStarted {
+            uint32_t n_files;
+        };
+        struct EProgress {
+            std::u8string file;
+            uint32_t percentage;
+        };
+        struct EFileCompleted {
+            std::u8string file;
+            Digest checksum;
+            EventHandler::CompletionStatus status;
+        };
+        struct ECheckCompleted {
+            EventHandler::Result r;
+        };
+        struct ECancelRequested {
+        };
+        struct ECanceled {
+        };
+        struct EError {
+            Error error;
+            std::u8string msg;
+        };
+        EventHandler* recipient;
+        std::variant<ECheckStarted, EProgress, EFileCompleted, ECheckCompleted, ECancelRequested, ECanceled, EError> event;
     };
     std::vector<Event> m_eventsQueue;
     std::mutex m_mtxEvents;
@@ -131,12 +158,28 @@ public:
     Scheduler& operator=(Scheduler&&) = delete;
     void start();
     void shutdown();
-    void run(EventHandler& event_handler);
+    void run();
     void post(VerifyOperation op);
     void post(CancelOperation op);
 private:
     void worker();
     void doVerify(OperationState& op);
+
+    void signalCheckStarted(EventHandler* recipient, uint32_t n_files);
+    void signalProgress(EventHandler* recipient, std::u8string_view file, uint32_t percentage);
+    void signalFileCompleted(EventHandler* recipient, std::u8string_view file, Digest checksum, EventHandler::CompletionStatus status);
+    void signalCheckCompleted(EventHandler* recipient, EventHandler::Result r);
+    void signalCancelRequested(EventHandler* recipient);
+    void signalCanceled(EventHandler* recipient);
+    void signalError(EventHandler* recipient, quicker_sfv::Error error, std::u8string_view msg);
+
+    static void dispatchEvent(EventHandler* recipient, Event::ECheckStarted const& e);
+    static void dispatchEvent(EventHandler* recipient, Event::EProgress const& e);
+    static void dispatchEvent(EventHandler* recipient, Event::EFileCompleted const& e);
+    static void dispatchEvent(EventHandler* recipient, Event::ECheckCompleted const& e);
+    static void dispatchEvent(EventHandler* recipient, Event::ECancelRequested const& e);
+    static void dispatchEvent(EventHandler* recipient, Event::ECanceled const& e);
+    static void dispatchEvent(EventHandler* recipient, Event::EError const& e);
 };
 
 Scheduler::Scheduler()
@@ -168,14 +211,14 @@ void Scheduler::shutdown() {
     m_worker.join();
 }
 
-void Scheduler::run(EventHandler& event_handler) {
+void Scheduler::run() {
     std::vector<Event> pending_events;
     {
         std::scoped_lock lk(m_mtxEvents);
         swap(pending_events, m_eventsQueue);
     }
     for (auto const& e : pending_events) {
-
+        std::visit([r = e.recipient](auto&& ev) { dispatchEvent(r, ev); }, e.event);
     }
 }
 
@@ -193,7 +236,7 @@ void Scheduler::post(VerifyOperation op) {
     m_cvOps.notify_one();
 }
 
-void Scheduler::post(CancelOperation op) {
+void Scheduler::post(CancelOperation) {
     SetEvent(m_cancelEvent);
 }
 
@@ -215,7 +258,7 @@ void Scheduler::worker() {
                     break;
                 }
             } catch (Exception& e) {
-                op.event_handler->on_error(e.code(), e.what8());
+                signalError(op.event_handler, e.code(), e.what8());
             }
         }
     }
@@ -228,6 +271,16 @@ inline char16_t const* assumeUtf16(LPCWSTR z_str) {
 
 inline LPCWSTR toWcharStr(char16_t const* z_str) {
     return reinterpret_cast<LPCWSTR>(z_str);
+}
+
+std::u16string resolvePath(std::u16string const& path) {
+    wchar_t empty;
+    DWORD const required_size = GetFullPathName(toWcharStr(path.c_str()), 0, &empty, nullptr);
+    wchar_t* buffer = new wchar_t[required_size];
+    GetFullPathName(toWcharStr(path.c_str()), required_size, buffer, nullptr);
+    std::u16string ret{ assumeUtf16(buffer) };
+    delete buffer;
+    return ret;
 }
 }
 
@@ -316,7 +369,7 @@ void Scheduler::doVerify(OperationState& op) {
     op.checksum_file = op.checksum_provider->readFromFile(reader);
     EventHandler::Result result{};
     result.total = static_cast<uint32_t>(op.checksum_file.getEntries().size());
-    op.event_handler->on_check_started(result.total);
+    signalCheckStarted(op.event_handler, result.total);
 
     HANDLE event_front = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     if (!event_front) {
@@ -339,14 +392,14 @@ void Scheduler::doVerify(OperationState& op) {
     for (auto const& f : op.checksum_file.getEntries()) {
         op.hasher->reset();
 
-        std::u16string const file_path = base_path + convertToUtf16(f.path);
+        std::u16string const file_path = resolvePath(base_path + convertToUtf16(f.path));
         HANDLE fin = CreateFile(toWcharStr(file_path.c_str()), GENERIC_READ, FILE_SHARE_READ, nullptr,
                                 OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED | FILE_FLAG_NO_BUFFERING,
                                 nullptr);
         if (fin == INVALID_HANDLE_VALUE) {
             // file missing
             ++result.missing;
-            op.event_handler->on_file_completed(f.path, EventHandler::CompletionStatus::Missing);
+            signalFileCompleted(op.event_handler, f.path, Digest{}, EventHandler::CompletionStatus::Missing);
             continue;
         }
         HandleGuard guard_fin(fin);
@@ -438,29 +491,129 @@ void Scheduler::doVerify(OperationState& op) {
 
             op.hasher->addData(std::span<char const>(front_buffer.data(), bytes_read));
             bytes_hashed += bytes_read;
-            op.event_handler->on_progress(f.path, static_cast<uint32_t>(bytes_hashed * 10000 / file_size));
+            signalProgress(op.event_handler, f.path, static_cast<uint32_t>(bytes_hashed * 10000 / file_size));
 
             std::swap(front_buffer, back_buffer);
             std::swap(event_front, event_back);
             std::swap(overlapped_front, overlapped_back);
             std::swap(front_pending, back_pending);
         }
-        if (front_pending) { WaitForSingleObject(event_front, INFINITE); GetOverlappedResult(fin, overlapped_front, nullptr, TRUE); }
-        if (back_pending) { WaitForSingleObject(event_back, INFINITE); GetOverlappedResult(fin, overlapped_back, nullptr, TRUE); }
+        if (front_pending) { WaitForSingleObject(event_front, INFINITE); DWORD b; GetOverlappedResult(fin, overlapped_front, &b, TRUE); }
+        if (back_pending) { WaitForSingleObject(event_back, INFINITE); DWORD b; GetOverlappedResult(fin, overlapped_back, &b, TRUE); }
         if (is_canceled) {
-            op.event_handler->on_canceled();
+            signalCanceled(op.event_handler);
             return;
         }
         auto const digest = op.hasher->finalize();
         if (digest == f.digest) {
-            op.event_handler->on_file_completed(f.path, EventHandler::CompletionStatus::Ok);
+            signalFileCompleted(op.event_handler, f.path, std::move(digest), EventHandler::CompletionStatus::Ok);
             ++result.ok;
         } else {
-            op.event_handler->on_file_completed(f.path, EventHandler::CompletionStatus::Bad);
+            signalFileCompleted(op.event_handler, f.path, std::move(digest), EventHandler::CompletionStatus::Bad);
             ++result.bad;
         }
     }
-    op.event_handler->on_check_completed(result);
+    signalCheckCompleted(op.event_handler, result);
+}
+
+void Scheduler::signalCheckStarted(EventHandler* recipient, uint32_t n_files) {
+    std::scoped_lock lk(m_mtxEvents);
+    m_eventsQueue.emplace_back(Event {
+        .recipient = recipient,
+        .event = Event::ECheckStarted {
+            .n_files = n_files
+        }
+    });
+}
+
+void Scheduler::signalProgress(EventHandler* recipient, std::u8string_view file, uint32_t percentage) {
+    std::scoped_lock lk(m_mtxEvents);
+    m_eventsQueue.emplace_back(Event {
+        .recipient = recipient,
+        .event = Event::EProgress {
+            .file = std::u8string(file),
+            .percentage = percentage
+        }
+    });
+}
+
+void Scheduler::signalFileCompleted(EventHandler* recipient, std::u8string_view file, Digest checksum, EventHandler::CompletionStatus status) {
+    std::scoped_lock lk(m_mtxEvents);
+    m_eventsQueue.emplace_back(Event {
+        .recipient = recipient,
+        .event = Event::EFileCompleted {
+            .file = std::u8string(file),
+            .checksum = std::move(checksum),
+            .status = status
+        }
+    });
+}
+
+void Scheduler::signalCheckCompleted(EventHandler* recipient, EventHandler::Result r) {
+    std::scoped_lock lk(m_mtxEvents);
+    m_eventsQueue.emplace_back(Event {
+        .recipient = recipient,
+        .event = Event::ECheckCompleted {
+            .r = r
+        }
+    });
+}
+
+void Scheduler::signalCancelRequested(EventHandler* recipient) {
+    std::scoped_lock lk(m_mtxEvents);
+    m_eventsQueue.emplace_back(Event {
+        .recipient = recipient,
+        .event = Event::ECancelRequested {
+        }
+    });
+}
+
+void Scheduler::signalCanceled(EventHandler* recipient)  {
+    std::scoped_lock lk(m_mtxEvents);
+    m_eventsQueue.emplace_back(Event {
+        .recipient = recipient,
+        .event = Event::ECanceled {
+        }
+    });
+}
+
+void Scheduler::signalError(EventHandler* recipient, quicker_sfv::Error error, std::u8string_view msg) {
+    std::scoped_lock lk(m_mtxEvents);
+    m_eventsQueue.emplace_back(Event {
+        .recipient = recipient,
+        .event = Event::EError {
+            .error = error,
+            .msg = std::u8string(msg)
+        }
+    });
+}
+
+void Scheduler::dispatchEvent(EventHandler* recipient, Event::ECheckStarted const& e) {
+    recipient->onCheckStarted(e.n_files);
+}
+
+void Scheduler::dispatchEvent(EventHandler* recipient, Event::EProgress const& e) {
+    recipient->onProgress(e.file, e.percentage);
+}
+
+void Scheduler::dispatchEvent(EventHandler* recipient, Event::EFileCompleted const& e) {
+    recipient->onFileCompleted(e.file, e.checksum, e.status);
+}
+
+void Scheduler::dispatchEvent(EventHandler* recipient, Event::ECheckCompleted const& e) {
+    recipient->onCheckCompleted(e.r);
+}
+
+void Scheduler::dispatchEvent(EventHandler* recipient, Event::ECancelRequested const&) {
+    recipient->onCancelRequested();
+}
+
+void Scheduler::dispatchEvent(EventHandler* recipient, Event::ECanceled const&) {
+    recipient->onCanceled();
+}
+
+void Scheduler::dispatchEvent(EventHandler* recipient, Event::EError const& e) {
+    recipient->onError(e.error, e.msg);
 }
 
 
@@ -525,17 +678,30 @@ private:
     HWND m_hTextFieldLeft;
     HWND m_hTextFieldRight;
     HWND m_hListView;
+    HIMAGELIST m_imageList;
+
+    struct Stats {
+        uint32_t total;
+        uint32_t completed;
+        uint32_t progress;
+        uint32_t ok;
+        uint32_t bad;
+        uint32_t missing;
+    } m_stats;
     struct ListViewEntry {
-        std::unique_ptr<TCHAR[]> name;
-        std::unique_ptr<TCHAR[]> crc;
-        bool status_ok;
+        std::u16string name;
+        std::u16string checksum;
+        enum Status {
+            Ok,
+            FailedMismatch,
+            FailedMissing,
+            Information
+        } status;
     };
     std::vector<ListViewEntry> m_listEntries;
-    HIMAGELIST m_imageList;
 
     HasherOptions m_options;
     FileProviders* m_fileProviders;
-    ChecksumFile m_checksumFile;
     Scheduler* m_scheduler;
 public:
     explicit MainWindow(FileProviders& file_providers, Scheduler& scheduler);
@@ -552,10 +718,21 @@ public:
 
     LRESULT WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+
+    void onCheckStarted(uint32_t n_files) override;
+    void onProgress(std::u8string_view file, uint32_t percentage) override;
+    void onFileCompleted(std::u8string_view file, Digest const& checksum, CompletionStatus status) override;
+    void onCheckCompleted(Result r) override;
+    void onCancelRequested() override;
+    void onCanceled() override;
+    void onError(quicker_sfv::Error error, std::u8string_view msg) override;
+
 private:
     LRESULT createUiElements(HWND parent_hwnd);
 
     LRESULT populateListView(NMHDR* nmh);
+
+    void UpdateStats();
 
     void resize();
 };
@@ -563,6 +740,7 @@ private:
 MainWindow::MainWindow(FileProviders& file_providers, Scheduler& scheduler)
     :m_hInstance(nullptr), m_windowTitle(nullptr), m_hWnd(nullptr), m_hTextFieldLeft(nullptr), m_hTextFieldRight(nullptr),
      m_hListView(nullptr), m_imageList(nullptr),
+     m_stats{ },
      m_options{ .has_sse42 = true, .has_avx512 = false}, m_fileProviders(&file_providers), m_scheduler(&scheduler)
 {
 }
@@ -736,34 +914,47 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 LRESULT MainWindow::populateListView(NMHDR* nmh) {
     if (nmh->code == LVN_GETDISPINFO) {
         NMLVDISPINFO* disp_info = std::bit_cast<NMLVDISPINFO*>(nmh);
+        if (disp_info->item.iItem > m_listEntries.size()) { enforce(!"Should never happen"); return 0; }
+        ListViewEntry& entry = m_listEntries[disp_info->item.iItem];
         if (disp_info->item.mask & LVIF_TEXT) {
-            // name
             if (disp_info->item.iSubItem == 0) {
-                TCHAR const test[] = TEXT("Name");
+                // name
                 _tcsncpy_s(disp_info->item.pszText, disp_info->item.cchTextMax,
-                    test, _TRUNCATE);
+                    toWcharStr(entry.name.c_str()), _TRUNCATE);
             } else if (disp_info->item.iSubItem == 1) {
-                // crc
-                TCHAR const test[] = TEXT("Lorem ipsum");
+                // checksum
                 _tcsncpy_s(disp_info->item.pszText, disp_info->item.cchTextMax,
-                    test, _TRUNCATE);
+                    toWcharStr(entry.checksum.c_str()), _TRUNCATE);
             } else if (disp_info->item.iSubItem == 2) {
                 // status
-                TCHAR const test[] = TEXT("Lorem ipsum2");
+                TCHAR const* status_text[] = { TEXT("OK"), TEXT("FAILED. Checksum mismatch"), TEXT("FAILED. File does not exist"), TEXT("") };
                 _tcsncpy_s(disp_info->item.pszText, disp_info->item.cchTextMax,
-                    test, _TRUNCATE);
+                    status_text[std::min<int>(entry.status, ARRAYSIZE(status_text) - 1)], _TRUNCATE);
             }
         } 
         if (disp_info->item.mask & LVIF_IMAGE) {
-            // @todo
             if (disp_info->item.iSubItem == 0) {
-                disp_info->item.iImage = disp_info->item.iItem % 3;
+                switch (entry.status) {
+                case ListViewEntry::Status::Ok:
+                    disp_info->item.iImage = 0;
+                    break;
+                case ListViewEntry::Status::FailedMismatch:
+                    disp_info->item.iImage = 1;
+                    break;
+                case ListViewEntry::Status::FailedMissing:
+                    disp_info->item.iImage = 1;
+                    break;
+                case ListViewEntry::Status::Information: [[fallthrough]];
+                default:
+                    disp_info->item.iImage = 2;
+                    break;
+                }
             }
         }
     } else if (nmh->code == LVN_ODCACHEHINT) {
-        // @todo
+        // not handled - all items always in memory
     } else if (nmh->code == LVN_ODFINDITEM) {
-        // @todo
+        // not handled - no finding in results list for now
     }
     return 0;
 }
@@ -881,7 +1072,7 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
     }
 
     TCHAR column_name1[] = TEXT("Name");
-    TCHAR column_name2[] = TEXT("CRC");
+    TCHAR column_name2[] = TEXT("Checksum");
     TCHAR column_name3[] = TEXT("Status");
     struct {
         TCHAR* name;
@@ -896,9 +1087,7 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
         };
         ListView_InsertColumn(m_hListView, i, &lv_column);
     }
-
     ListView_DeleteAllItems(m_hListView);
-    ListView_SetItemCount(m_hListView, 5);
 
     SetWindowFont(m_hTextFieldLeft, GetWindowFont(m_hListView), TRUE);
     SetWindowFont(m_hTextFieldRight, GetWindowFont(m_hListView), TRUE);
@@ -937,6 +1126,90 @@ void MainWindow::resize() {
     MoveWindow(m_hTextFieldLeft, 0, 0, new_width / 2, textFieldHeight, TRUE);
     MoveWindow(m_hTextFieldRight, new_width / 2, 0, new_width / 2, textFieldHeight, TRUE);
     MoveWindow(m_hListView, 0, textFieldHeight, new_width, rect.bottom - textFieldHeight, TRUE);
+}
+
+void MainWindow::onCheckStarted(uint32_t n_files) {
+    ListView_DeleteAllItems(m_hListView);
+    m_listEntries.clear();
+    m_listEntries.push_back(ListViewEntry{ .name = u"QuickerSfv @todo version", .checksum = {}, .status = ListViewEntry::Status::Information });
+    m_stats = Stats{ .total = n_files };
+    UpdateStats();
+    ListView_SetItemCount(m_hListView, 1);
+}
+
+void MainWindow::onProgress(std::u8string_view file, uint32_t percentage) {
+    UNREFERENCED_PARAMETER(file);
+    m_stats.progress = percentage;
+    UpdateStats();
+}
+
+void MainWindow::onFileCompleted(std::u8string_view file, Digest const& checksum, CompletionStatus status) {
+    ++m_stats.completed;
+    m_stats.progress = 0;
+    switch (status) {
+    case CompletionStatus::Ok:
+        m_listEntries.push_back(ListViewEntry{ .name = convertToUtf16(file), .checksum = convertToUtf16(checksum.toString()), .status = ListViewEntry::Status::Ok});
+        ++m_stats.ok;
+        break;
+    case CompletionStatus::Missing:
+        m_listEntries.push_back(ListViewEntry{ .name = convertToUtf16(file), .checksum = {}, .status = ListViewEntry::Status::FailedMissing });
+        ++m_stats.missing;
+        break;
+    case CompletionStatus::Bad:
+        m_listEntries.push_back(ListViewEntry{ .name = convertToUtf16(file), .checksum = convertToUtf16(checksum.toString()), .status = ListViewEntry::Status::FailedMismatch});
+        ++m_stats.bad;
+        break;
+    }
+    ListView_SetItemCount(m_hListView, m_listEntries.size());
+    UpdateStats();
+}
+
+void MainWindow::onCheckCompleted(Result r) {
+    m_stats.ok = r.ok;
+    m_stats.bad = r.bad;
+    m_stats.missing = r.missing;
+    m_stats.completed = r.ok + r.bad + r.missing;
+    m_stats.progress = 0;
+    m_listEntries.push_back(ListViewEntry{ .name = u"@todo files checked", .checksum = {}, .status = ListViewEntry::Status::Information});
+    if ((m_stats.missing == 0) && (m_stats.bad == 0)) {
+        m_listEntries.push_back(ListViewEntry{ .name = u"All files OK", .checksum = {}, .status = ListViewEntry::Status::Ok });
+    } else if (m_stats.missing > 0) {
+        m_listEntries.push_back(ListViewEntry{ .name = u"@todo files missing", .checksum = {}, .status = ListViewEntry::Status::FailedMissing });
+    } else {
+        m_listEntries.push_back(ListViewEntry{ .name = u"@todo files failed", .checksum = {}, .status = ListViewEntry::Status::FailedMismatch });
+    }
+    ListView_SetItemCount(m_hListView, m_listEntries.size());
+    UpdateStats();
+}
+
+void MainWindow::onCancelRequested() {
+}
+
+void MainWindow::onCanceled() {
+}
+
+void MainWindow::onError(quicker_sfv::Error error, std::u8string_view msg) {
+    UNREFERENCED_PARAMETER(error);
+    m_listEntries.push_back(ListViewEntry{ .name = u"ERROR: " + convertToUtf16(msg), .checksum = {}, .status = ListViewEntry::Status::Information });
+    ListView_SetItemCount(m_hListView, m_listEntries.size());
+}
+
+void MainWindow::UpdateStats() {
+    TCHAR buffer[50];
+    constexpr size_t const buffer_size = ARRAYSIZE(buffer);
+    auto format = [&buffer](LPCTSTR format, ...) -> LPCTSTR {
+        va_list args;
+        va_start(args, format);
+        HRESULT hres = StringCchVPrintf(buffer, buffer_size, format, args);
+        va_end(args);
+        return buffer;
+    };
+    if (m_stats.progress == 0) {
+        Static_SetText(m_hTextFieldLeft, format(TEXT("Completed files: %d/%d\nOk: %d"), m_stats.completed, m_stats.total, m_stats.ok));
+    } else {
+        Static_SetText(m_hTextFieldLeft, format(TEXT("Completed files: %d/%d (File: %d%%)\nOk: %d"), m_stats.completed, m_stats.total, m_stats.progress / 100, m_stats.ok));
+    }
+    Static_SetText(m_hTextFieldRight, format(TEXT("Bad: %d\nMissing: %d"), m_stats.bad, m_stats.missing));
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -993,7 +1266,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
     scheduler.start();
     MSG message;
     for (;;) {
-        scheduler.run(main_window);
+        scheduler.run();
         BOOL const bret = GetMessage(&message, nullptr, 0, 0);
         if (bret == 0) {
             break;

@@ -11,7 +11,7 @@ Digest::Digest()
 Digest::~Digest() = default;
 
 Digest::Digest(Digest const& rhs)
-    :m_digest(rhs.m_digest->clone())
+    :m_digest(rhs.m_digest ? rhs.m_digest->clone() : nullptr)
 {}
 
 Digest& Digest::operator=(Digest const& rhs) {
