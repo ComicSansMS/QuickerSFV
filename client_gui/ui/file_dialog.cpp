@@ -100,6 +100,7 @@ HRESULT FileDialogEventHandler::OnShareViolation(IFileDialog* pfd, IShellItem* p
 }
 
 HRESULT FileDialogEventHandler::OnTypeChange(IFileDialog* pfd) {
+    UNREFERENCED_PARAMETER(pfd);
     return S_OK;
 }
 

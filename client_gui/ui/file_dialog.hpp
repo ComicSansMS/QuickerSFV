@@ -35,12 +35,6 @@ public:
 
 CComPtr<FileDialogEventHandler> createFileDialogEventHandler(std::span<COMDLG_FILTERSPEC const> filter_types);
 
-
-enum class FileType : UINT {
-    VerificationDB = 0,
-    AllFiles = 1
-};
-
 enum class FileDialogAction {
     Open,
     OpenFolder,

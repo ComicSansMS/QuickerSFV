@@ -102,6 +102,14 @@ struct VerifyOperation {
     ChecksumProvider* provider;
 };
 
+struct CreateFromFolderOperation {
+    EventHandler* event_handler;
+    HasherOptions options;
+    std::u16string target_file;
+    std::u16string folder_path;
+    ChecksumProvider* provider;
+};
+
 struct CancelOperation {
     EventHandler* event_handler;
 };
@@ -168,6 +176,7 @@ public:
     void run();
     void post(VerifyOperation op);
     void post(CancelOperation op);
+    void post(CreateFromFolderOperation op);
 private:
     void worker();
     void doVerify(OperationState& op);
@@ -246,6 +255,10 @@ void Scheduler::post(VerifyOperation op) {
 
 void Scheduler::post(CancelOperation) {
     SetEvent(m_cancelEvent);
+}
+
+void Scheduler::post(CreateFromFolderOperation op) {
+    // @todo
 }
 
 void Scheduler::worker() {
@@ -1000,18 +1013,20 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 SetMenuItemInfo(m_hMenu, ID_OPTIONS_USEAVX512, FALSE, &mii);
             } else if (LOWORD(wParam) == ID_CREATE_FROM_FOLDER) {
                 if (auto const opt = OpenFolder(hWnd); opt) {
+                    auto const& [folder_path, _] = *opt;
                     if (auto const opt_s = SaveFile(hWnd, *m_fileProviders); opt_s) {
-                        /*
-                        ChecksumFile new_file;
-                        HasherOptions hasher_options{ .has_sse42 = true, .has_avx512 = false };
-                        for (FileInfo const& info : iterateFiles(*opt)) {
-                            new_file.addEntry(convertToUtf8(info.relative_path),
-                                hashFile(checksum_provider->createHasher(hasher_options), info.absolute_path, info.size));
-                        }
-                        FileOutputWin32 writer(*opt_s);
-                        new_file.sortEntries();
-                        checksum_provider->serialize(writer, new_file);
-                        */
+                        auto const& [target_file_path, selected_provider] = *opt_s;
+                        ChecksumProvider* checksum_provider =
+                            (selected_provider >= m_fileProviders->fileTypes().size()) ?
+                            m_fileProviders->getMatchingProviderFor(convertToUtf8(target_file_path)) :
+                            m_fileProviders->getProviderFromIndex(selected_provider);
+                        m_scheduler->post(CreateFromFolderOperation{
+                            .event_handler = this,
+                            .options = m_options,
+                            .target_file = target_file_path,
+                            .folder_path = folder_path,
+                            .provider = checksum_provider,
+                        });
                     }
                 }
                 return 0;
