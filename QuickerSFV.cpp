@@ -204,7 +204,7 @@ void Scheduler::start() {
     m_startingThreadId = GetCurrentThreadId();
     m_cancelEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
     if (!m_cancelEvent) {
-        // @todo catastrophic error
+        throwException(Error::Failed);
     }
     m_worker = std::thread([this]() { worker(); });
 }
@@ -295,8 +295,26 @@ LPCTSTR formatString(LPTSTR out_buffer, size_t buffer_size, LPCTSTR format, ...)
     va_list args;
     va_start(args, format);
     HRESULT hres = StringCchVPrintf(out_buffer, buffer_size, format, args);
+    if ((hres != S_OK) && (hres != STRSAFE_E_INSUFFICIENT_BUFFER)) {
+        throwException(Error::Failed);
+    }
     va_end(args);
     return out_buffer;
+}
+
+std::u16string formatString(size_t buffer_size, LPCTSTR format, ...) {
+    va_list args;
+    va_start(args, format);
+    std::u16string ret;
+    ret.resize(buffer_size);
+    size_t remain = 0;
+    HRESULT hres = StringCchVPrintfEx(reinterpret_cast<TCHAR*>(ret.data()), buffer_size - 1, nullptr, &remain, 0, format, args);
+    if ((hres != S_OK) && (hres != STRSAFE_E_INSUFFICIENT_BUFFER)) {
+        throwException(Error::Failed);
+    }
+    va_end(args);
+    ret.resize(ret.size() - remain - 1);
+    return ret;
 }
 } // anonymous namespace
 
@@ -546,7 +564,7 @@ void Scheduler::doVerify(OperationState& op) {
             uint32_t current_progress = static_cast<uint32_t>(bytes_hashed * 100 / file_size);
             if (current_progress != last_progress) {
                 int64_t const t_avg = bandwidth_track.rollingAverage().count();
-                uint32_t bandwidth_mib_s = (t_avg) ? ((static_cast<int64_t>(BUFFER_SIZE) * 1'000'000'000ll) / (t_avg * 1'048'576ll)) : 0;
+                uint32_t const bandwidth_mib_s = static_cast<uint32_t>((t_avg) ? ((static_cast<int64_t>(BUFFER_SIZE) * 1'000'000'000ll) / (t_avg * 1'048'576ll)) : 0);
                 signalProgress(op.event_handler, f.path, current_progress, bandwidth_mib_s);
                 last_progress = current_progress;
             }
@@ -1199,7 +1217,8 @@ void MainWindow::resize() {
 void MainWindow::onCheckStarted(uint32_t n_files) {
     ListView_DeleteAllItems(m_hListView);
     m_listEntries.clear();
-    m_listEntries.push_back(ListViewEntry{ .name = u"QuickerSfv @todo version", .checksum = {}, .status = ListViewEntry::Status::Information });
+    quicker_sfv::Version const v = quicker_sfv::getVersion();
+    m_listEntries.push_back(ListViewEntry{ .name = formatString(50, TEXT("QuickerSfv v%d.%d.%d"), v.major, v.minor, v.patch), .checksum = {}, .status = ListViewEntry::Status::Information });
     m_stats = Stats{ .total = n_files };
     UpdateStats();
     ListView_SetItemCount(m_hListView, 1);
@@ -1242,13 +1261,23 @@ void MainWindow::onCheckCompleted(Result r) {
     m_stats.completed = r.ok + r.bad + r.missing;
     m_stats.progress = 0;
     m_stats.bandwidth = 0;
-    m_listEntries.push_back(ListViewEntry{ .name = u"@todo files checked", .checksum = {}, .status = ListViewEntry::Status::Information});
+    m_listEntries.push_back(ListViewEntry{ .name = formatString(30, TEXT("%d files checked"), m_stats.completed), .checksum = {}, .status = ListViewEntry::Status::Information});
     if ((m_stats.missing == 0) && (m_stats.bad == 0)) {
         m_listEntries.push_back(ListViewEntry{ .name = u"All files OK", .checksum = {}, .status = ListViewEntry::Status::Ok });
-    } else if (m_stats.missing > 0) {
-        m_listEntries.push_back(ListViewEntry{ .name = u"@todo files missing", .checksum = {}, .status = ListViewEntry::Status::FailedMissing });
-    } else {
-        m_listEntries.push_back(ListViewEntry{ .name = u"@todo files failed", .checksum = {}, .status = ListViewEntry::Status::FailedMismatch });
+    } 
+    if (m_stats.missing > 0) {
+        m_listEntries.push_back(ListViewEntry{
+            .name = formatString(30, TEXT("%d file%s missing"), m_stats.missing, ((m_stats.missing == 1) ? TEXT("") : TEXT("s"))),
+            .checksum = {},
+            .status = ListViewEntry::Status::FailedMissing
+        });
+    }
+    if (m_stats.bad > 0) {
+        m_listEntries.push_back(ListViewEntry{
+            .name = formatString(30, TEXT("%d file%s failed"), m_stats.bad, ((m_stats.bad == 1) ? TEXT("") : TEXT("s"))),
+            .checksum = {},
+            .status = ListViewEntry::Status::FailedMismatch
+        });
     }
     ListView_SetItemCount(m_hListView, m_listEntries.size());
     ListView_EnsureVisible(m_hListView, m_listEntries.size() - 1, FALSE);
