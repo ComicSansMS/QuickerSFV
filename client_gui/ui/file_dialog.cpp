@@ -4,8 +4,42 @@
 
 namespace quicker_sfv::gui {
 
-FileDialogEventHandler::FileDialogEventHandler()
-    :m_refCount(0)
+namespace {
+
+class AdviseGuard {
+private:
+    IFileDialog* m_file_dialog;
+    DWORD m_cookie;
+public:
+    explicit AdviseGuard(IFileDialog* file_dialog, DWORD cookie)
+        :m_file_dialog(file_dialog), m_cookie(cookie)
+    {
+    }
+    ~AdviseGuard() {
+        m_file_dialog->Unadvise(m_cookie);
+    }
+    AdviseGuard(AdviseGuard const&) = delete;
+    AdviseGuard& operator=(AdviseGuard const&) = delete;
+};
+
+std::u16string defaultExtension(COMDLG_FILTERSPEC const& fs) {
+    std::u16string_view fs_view(reinterpret_cast<char16_t const*>(fs.pszSpec));
+    auto first_dot = fs_view.find(u'.');
+    auto first_semicolon = fs_view.find(u';');
+    if ((first_dot == std::u16string_view::npos) ||
+        (first_dot + 1 >= first_semicolon) ||
+        (first_dot + 2 >= first_semicolon) ||
+        (fs_view[first_dot + 1] == u'*'))
+    {
+        return {};
+    }
+    return std::u16string{ fs_view.substr(first_dot + 1, first_semicolon - first_dot - 1) };
+}
+
+} // anonymous namespace
+
+FileDialogEventHandler::FileDialogEventHandler(std::span<COMDLG_FILTERSPEC const> filter_types)
+    :m_refCount(0), m_filterTypes(filter_types)
 {}
 
 FileDialogEventHandler::~FileDialogEventHandler()
@@ -66,7 +100,6 @@ HRESULT FileDialogEventHandler::OnShareViolation(IFileDialog* pfd, IShellItem* p
 }
 
 HRESULT FileDialogEventHandler::OnTypeChange(IFileDialog* pfd) {
-    UNREFERENCED_PARAMETER(pfd);
     return S_OK;
 }
 
@@ -77,33 +110,13 @@ HRESULT FileDialogEventHandler::OnOverwrite(IFileDialog* pfd, IShellItem* psi, F
     return S_OK;
 }
 
-CComPtr<FileDialogEventHandler> createFileDialogEventHandler() {
-    FileDialogEventHandler* p = new (std::nothrow) FileDialogEventHandler();
+CComPtr<FileDialogEventHandler> createFileDialogEventHandler(std::span<COMDLG_FILTERSPEC const> filter_types) {
+    FileDialogEventHandler* p = new (std::nothrow) FileDialogEventHandler(filter_types);
     if (!p) {
         return nullptr;
     }
     return p;
 }
-
-namespace {
-
-class AdviseGuard {
-private:
-    IFileDialog* m_file_dialog;
-    DWORD m_cookie;
-public:
-    explicit AdviseGuard(IFileDialog* file_dialog, DWORD cookie)
-        :m_file_dialog(file_dialog), m_cookie(cookie)
-    {
-    }
-    ~AdviseGuard() {
-        m_file_dialog->Unadvise(m_cookie);
-    }
-    AdviseGuard(AdviseGuard const&) = delete;
-    AdviseGuard& operator=(AdviseGuard const&) = delete;
-};
-
-} // anonymous namespace
 
 std::optional<FileDialogResult> FileDialog(HWND parent_window, FileDialogAction action, LPCWSTR dialog_title, std::span<COMDLG_FILTERSPEC const> filter_types) {
     CComPtr<IFileDialog> file_dialog = nullptr;
@@ -113,7 +126,7 @@ std::optional<FileDialogResult> FileDialog(HWND parent_window, FileDialogAction 
         MessageBox(nullptr, TEXT("Error creating file dialog"), TEXT("Error"), MB_ICONERROR);
         return std::nullopt;
     }
-    CComPtr<gui::FileDialogEventHandler> file_dialog_event_handler = gui::createFileDialogEventHandler();
+    CComPtr<gui::FileDialogEventHandler> file_dialog_event_handler = gui::createFileDialogEventHandler(filter_types);
     DWORD cookie;
     file_dialog->Advise(file_dialog_event_handler, &cookie);
     if (!SUCCEEDED(hres)) {
@@ -146,10 +159,18 @@ std::optional<FileDialogResult> FileDialog(HWND parent_window, FileDialogAction 
             MessageBox(nullptr, TEXT("Error setting file dialog file types"), TEXT("Error"), MB_ICONERROR);
             return std::nullopt;
         }
-        hres = file_dialog->SetFileTypeIndex(static_cast<UINT>(FileType::VerificationDB));
+        hres = file_dialog->SetFileTypeIndex(1);
         if (!SUCCEEDED(hres)) {
             MessageBox(nullptr, TEXT("Error setting file dialog file type index"), TEXT("Error"), MB_ICONERROR);
             return std::nullopt;
+        }
+        auto ext = defaultExtension(filter_types[0]);
+        if (!ext.empty()) {
+            hres = file_dialog->SetDefaultExtension((LPCTSTR)ext.c_str());
+            if (!SUCCEEDED(hres)) {
+                MessageBox(nullptr, TEXT("Error setting file dialog default extension"), TEXT("Error"), MB_ICONERROR);
+                return std::nullopt;
+            }
         }
     }
     if (dialog_title) {

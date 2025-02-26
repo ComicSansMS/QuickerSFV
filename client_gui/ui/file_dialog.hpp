@@ -14,12 +14,13 @@ namespace quicker_sfv::gui{
 class FileDialogEventHandler: public IFileDialogEvents {
 private:
     std::atomic<ULONG> m_refCount;
+    std::span<COMDLG_FILTERSPEC const> m_filterTypes;
 private:
     ~FileDialogEventHandler();
     FileDialogEventHandler(FileDialogEventHandler const&) = delete;
     FileDialogEventHandler& operator=(FileDialogEventHandler const&) = delete;
 public:
-    FileDialogEventHandler();
+    explicit FileDialogEventHandler(std::span<COMDLG_FILTERSPEC const> filter_types);
     HRESULT QueryInterface(IID const& iid, void** ppv) override;
     ULONG AddRef() override;
     ULONG Release() override;
@@ -32,7 +33,7 @@ public:
     HRESULT OnOverwrite(IFileDialog* pfd, IShellItem* psi, FDE_OVERWRITE_RESPONSE* pResponse) override;
 };
 
-CComPtr<FileDialogEventHandler> createFileDialogEventHandler();
+CComPtr<FileDialogEventHandler> createFileDialogEventHandler(std::span<COMDLG_FILTERSPEC const> filter_types);
 
 
 enum class FileType : UINT {
