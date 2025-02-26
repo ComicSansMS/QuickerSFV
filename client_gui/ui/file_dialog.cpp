@@ -105,25 +105,25 @@ public:
 
 } // anonymous namespace
 
-std::optional<std::u16string> FileDialog(HWND parent_window, FileDialogAction action, LPCWSTR dialog_title, std::span<COMDLG_FILTERSPEC const> filter_types) {
-    CComPtr<IFileDialog> file_open_dialog = nullptr;
+std::optional<FileDialogResult> FileDialog(HWND parent_window, FileDialogAction action, LPCWSTR dialog_title, std::span<COMDLG_FILTERSPEC const> filter_types) {
+    CComPtr<IFileDialog> file_dialog = nullptr;
     CLSID const dialog_clsid = (action == FileDialogAction::SaveAs) ? CLSID_FileSaveDialog : CLSID_FileOpenDialog;
-    HRESULT hres = CoCreateInstance(dialog_clsid, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&file_open_dialog));
+    HRESULT hres = CoCreateInstance(dialog_clsid, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&file_dialog));
     if (!SUCCEEDED(hres)) {
         MessageBox(nullptr, TEXT("Error creating file dialog"), TEXT("Error"), MB_ICONERROR);
         return std::nullopt;
     }
     CComPtr<gui::FileDialogEventHandler> file_dialog_event_handler = gui::createFileDialogEventHandler();
     DWORD cookie;
-    file_open_dialog->Advise(file_dialog_event_handler, &cookie);
+    file_dialog->Advise(file_dialog_event_handler, &cookie);
     if (!SUCCEEDED(hres)) {
         MessageBox(nullptr, TEXT("Error advising dialog event handler"), TEXT("Error"), MB_ICONERROR);
         return std::nullopt;
     }
-    AdviseGuard advise_guard{ file_open_dialog, cookie };
+    AdviseGuard advise_guard{ file_dialog, cookie };
 
     FILEOPENDIALOGOPTIONS opts;
-    hres = file_open_dialog->GetOptions(&opts);
+    hres = file_dialog->GetOptions(&opts);
     if (!SUCCEEDED(hres)) {
         MessageBox(nullptr, TEXT("Error retrieving file dialog options"), TEXT("Error"), MB_ICONERROR);
         return std::nullopt;
@@ -134,31 +134,37 @@ std::optional<std::u16string> FileDialog(HWND parent_window, FileDialogAction ac
     } else if (action == FileDialogAction::OpenFolder) {
         opts |= FOS_FORCEFILESYSTEM | FOS_PICKFOLDERS | FOS_DONTADDTORECENT;
     }
-    hres = file_open_dialog->SetOptions(opts);
+    hres = file_dialog->SetOptions(opts);
     if (!SUCCEEDED(hres)) {
         MessageBox(nullptr, TEXT("Error setting file dialog options"), TEXT("Error"), MB_ICONERROR);
         return std::nullopt;
     }
     if (action != FileDialogAction::OpenFolder) {
         enforce(filter_types.size() < std::numeric_limits<UINT>::max());
-        hres = file_open_dialog->SetFileTypes(static_cast<UINT>(filter_types.size()), filter_types.data());
+        hres = file_dialog->SetFileTypes(static_cast<UINT>(filter_types.size()), filter_types.data());
         if (!SUCCEEDED(hres)) {
             MessageBox(nullptr, TEXT("Error setting file dialog file types"), TEXT("Error"), MB_ICONERROR);
             return std::nullopt;
         }
-        hres = file_open_dialog->SetFileTypeIndex(static_cast<UINT>(FileType::VerificationDB));
+        hres = file_dialog->SetFileTypeIndex(static_cast<UINT>(FileType::VerificationDB));
         if (!SUCCEEDED(hres)) {
             MessageBox(nullptr, TEXT("Error setting file dialog file type index"), TEXT("Error"), MB_ICONERROR);
             return std::nullopt;
         }
     }
     if (dialog_title) {
-        file_open_dialog->SetTitle(dialog_title);
+        file_dialog->SetTitle(dialog_title);
     }
-    hres = file_open_dialog->Show(parent_window);
+    hres = file_dialog->Show(parent_window);
     if (hres == S_OK) {
+        UINT file_type_index;
+        hres = file_dialog->GetFileTypeIndex(&file_type_index);
+        if (hres != S_OK) {
+            MessageBox(nullptr, TEXT("Error retrieving selected file type"), TEXT("Error"), MB_ICONERROR);
+            return std::nullopt;
+        }
         IShellItem* shell_result;
-        hres = file_open_dialog->GetResult(&shell_result);
+        hres = file_dialog->GetResult(&shell_result);
         if (hres != S_OK) {
             MessageBox(nullptr, TEXT("Error retrieving file dialog result"), TEXT("Error"), MB_ICONERROR);
             return std::nullopt;
@@ -175,7 +181,7 @@ std::optional<std::u16string> FileDialog(HWND parent_window, FileDialogAction ac
             ret.insert(0, u"\\\\?\\");
         }
         CoTaskMemFree(filename);
-        return ret;
+        return FileDialogResult{ .path = ret, .selected_file_type = file_type_index - 1 };
     }
     return std::nullopt;
 }

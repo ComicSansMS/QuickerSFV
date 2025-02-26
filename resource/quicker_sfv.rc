@@ -101,28 +101,27 @@ END
 // Menu
 //
 
-IDR_MENU1 MENU
+IDR_MENU1 MENUEX
 BEGIN
-    POPUP "&File"
+    POPUP "&File",                          65535,MFT_STRING,MFS_ENABLED
     BEGIN
-        MENUITEM "&Open",                       ID_FILE_OPEN
-        POPUP "&Create"
+        MENUITEM "&Open",                       ID_FILE_OPEN,MFT_STRING,MFS_ENABLED
+        POPUP "&Create",                        65535,MFT_STRING,MFS_ENABLED
         BEGIN
-            MENUITEM ".&CRC",                       ID_CREATE_CRC
-            MENUITEM ".&MD5",                       ID_CREATE_MD5
+            MENUITEM "From &Folder",                ID_CREATE_FROM_FOLDER,MFT_STRING,MFS_ENABLED
         END
-        MENUITEM SEPARATOR
-        MENUITEM "E&xit",                       ID_FILE_EXIT
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "E&xit",                       ID_FILE_EXIT,MFT_STRING,MFS_ENABLED
     END
-    POPUP "&Options"
+    POPUP "&Options",                       65535,MFT_STRING,MFS_ENABLED
     BEGIN
-        MENUITEM "&Update DB",                  ID_OPTIONS_UPDATEDB, CHECKED
-        MENUITEM SEPARATOR
-        MENUITEM "Use AVX512",                  ID_OPTIONS_USEAVX512, INACTIVE
+        MENUITEM "&Update DB",                  ID_OPTIONS_UPDATEDB,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "Use AVX512",                  ID_OPTIONS_USEAVX512,MFT_STRING,MFS_GRAYED
     END
-    POPUP "&Help"
+    POPUP "&Help",                          65535,MFT_STRING | MFT_RIGHTJUSTIFY,MFS_ENABLED
     BEGIN
-        MENUITEM "&About",                      ID_HELP_ABOUT
+        MENUITEM "&About",                      ID_HELP_ABOUT,MFT_STRING,MFS_ENABLED
     END
 END
 

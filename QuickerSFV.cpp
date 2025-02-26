@@ -277,15 +277,15 @@ inline char16_t const* assumeUtf16(LPCWSTR z_str) {
     return reinterpret_cast<char16_t const*>(z_str);
 }
 
-inline LPCWSTR toWcharStr(char16_t const* z_str) {
-    return reinterpret_cast<LPCWSTR>(z_str);
+inline LPCWSTR toWcharStr(std::u16string const& u16str) {
+    return reinterpret_cast<LPCWSTR>(u16str.c_str());
 }
 
 std::u16string resolvePath(std::u16string const& path) {
     wchar_t empty;
-    DWORD const required_size = GetFullPathName(toWcharStr(path.c_str()), 0, &empty, nullptr);
+    DWORD const required_size = GetFullPathName(toWcharStr(path), 0, &empty, nullptr);
     wchar_t* buffer = new wchar_t[required_size];
-    GetFullPathName(toWcharStr(path.c_str()), required_size, buffer, nullptr);
+    GetFullPathName(toWcharStr(path), required_size, buffer, nullptr);
     std::u16string ret{ assumeUtf16(buffer) };
     delete buffer;
     return ret;
@@ -326,7 +326,7 @@ public:
     FileInputWin32(std::u16string const& filename)
         :m_eof(false)
     {
-        m_fin = CreateFile(toWcharStr(filename.c_str()), GENERIC_READ, FILE_SHARE_READ, nullptr,
+        m_fin = CreateFile(toWcharStr(filename), GENERIC_READ, FILE_SHARE_READ, nullptr,
                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (m_fin == INVALID_HANDLE_VALUE) {
             std::abort();
@@ -359,7 +359,7 @@ private:
 public:
     FileOutputWin32(std::u16string const& filename)
     {
-        m_fout = CreateFile(toWcharStr(filename.c_str()), GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+        m_fout = CreateFile(toWcharStr(filename), GENERIC_WRITE, FILE_SHARE_READ, nullptr,
                             CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (m_fout == INVALID_HANDLE_VALUE) {
             throwException(Error::FileIO);
@@ -458,7 +458,7 @@ void Scheduler::doVerify(OperationState& op) {
         op.hasher->reset();
 
         std::u16string const file_path = resolvePath(base_path + convertToUtf16(f.path));
-        HANDLE fin = CreateFile(toWcharStr(file_path.c_str()), GENERIC_READ, FILE_SHARE_READ, nullptr,
+        HANDLE fin = CreateFile(toWcharStr(file_path), GENERIC_READ, FILE_SHARE_READ, nullptr,
                                 OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED,
                                 nullptr);
         if (fin == INVALID_HANDLE_VALUE) {
@@ -747,6 +747,13 @@ public:
     std::span<FileType const> fileTypes() const {
         return m_fileTypes;
     }
+
+    ChecksumProvider* getProviderFromIndex(UINT provider_index) {
+        if ((provider_index >= 0) && (provider_index < m_providers.size())) {
+            return m_providers[provider_index].get();
+        }
+        return nullptr;
+    }
 private:
     void registerFileType(ChecksumProvider const& provider) {
         m_fileTypes.emplace_back(std::u8string(provider.fileExtensions()), std::u8string(provider.fileDescription()));
@@ -832,23 +839,47 @@ MainWindow::MainWindow(FileProviders& file_providers, Scheduler& scheduler)
 
 MainWindow::~MainWindow() = default;
 
-const COMDLG_FILTERSPEC g_FileTypes[] =
-{
-    {L"File Verification Database", L"*.sfv;*.crc;*.txt;*.ckz;*.csv;*.par;*.md5"},
-    {L"All Files",                  L"*.*"}
+struct FileSpec {
+    std::vector<COMDLG_FILTERSPEC> fileTypes;
+    std::vector<std::u16string> stringPool;
 };
 
-std::optional<std::u16string> OpenFolder(HWND parent_window) {
+FileSpec determineFileTypes(FileProviders const& file_providers, bool include_catchall) {
+    FileSpec ret;
+    if (include_catchall) {
+        ret.stringPool.push_back(u"File Verification Database");
+        ret.stringPool.push_back(u"");
+    }
+    for (auto const& f : file_providers.fileTypes()) {
+        ret.stringPool.push_back(convertToUtf16(f.description));
+        ret.stringPool.push_back(convertToUtf16(f.extensions));
+        if (include_catchall) {
+            if (!ret.stringPool[1].empty()) { ret.stringPool[1].append(u";"); }
+            ret.stringPool[1].append(ret.stringPool.back());
+        }
+    }
+    if (include_catchall) {
+        ret.stringPool.push_back(u"All Files");
+        ret.stringPool.push_back(u"*.*");
+    }
+    ret.fileTypes.reserve(ret.stringPool.size() / 2);
+    for (size_t i = 0; i < ret.stringPool.size(); i += 2) {
+        ret.fileTypes.push_back(COMDLG_FILTERSPEC{ toWcharStr(ret.stringPool[i]), toWcharStr(ret.stringPool[i + 1]) });
+    }
+    return ret;
+}
+
+std::optional<gui::FileDialogResult> OpenFolder(HWND parent_window) {
     return gui::FileDialog(parent_window, gui::FileDialogAction::OpenFolder, nullptr, {});
 }
 
 
-std::optional<std::u16string> OpenFile(HWND parent_window, FileProviders const& file_providers) {
-    return gui::FileDialog(parent_window, gui::FileDialogAction::Open, nullptr, g_FileTypes);
+std::optional<gui::FileDialogResult> OpenFile(HWND parent_window, FileProviders const& file_providers) {
+    return gui::FileDialog(parent_window, gui::FileDialogAction::Open, nullptr, determineFileTypes(file_providers, true).fileTypes);
 }
 
-std::optional<std::u16string> SaveFile(HWND parent_window, FileProviders const& file_providers) {
-    return gui::FileDialog(parent_window, gui::FileDialogAction::SaveAs, nullptr, g_FileTypes);
+std::optional<gui::FileDialogResult> SaveFile(HWND parent_window, FileProviders const& file_providers) {
+    return gui::FileDialog(parent_window, gui::FileDialogAction::SaveAs, nullptr, determineFileTypes(file_providers, false).fileTypes);
 }
 
 struct FileInfo {
@@ -879,7 +910,7 @@ std::generator<FileInfo> iterateFiles(std::u16string const& base_path) {
         WIN32_FIND_DATA find_data;
         std::u16string const current_path = std::move(directories.back());
         directories.pop_back();
-        HANDLE hsearch = FindFirstFileEx(toWcharStr(current_path.c_str()), FindExInfoBasic, &find_data,
+        HANDLE hsearch = FindFirstFileEx(toWcharStr(current_path), FindExInfoBasic, &find_data,
                                          FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
         if (hsearch == INVALID_HANDLE_VALUE) {
             MessageBox(nullptr, TEXT("Unable to open file for finding"), TEXT("Error"), MB_ICONERROR);
@@ -894,7 +925,7 @@ std::generator<FileInfo> iterateFiles(std::u16string const& base_path) {
                 appendWildcard(p);
                 directories.emplace_back(std::move(p));
             } else {
-                co_yield FileInfo{ .absolute_path = toWcharStr(p.c_str()), .relative_path = relativePathTo(p, base_path), .size = filesize };
+                co_yield FileInfo{ .absolute_path = toWcharStr(p), .relative_path = relativePathTo(p, base_path), .size = filesize };
             }
         } while (FindNextFile(hsearch, &find_data) != FALSE);
         bool success = (GetLastError() == ERROR_NO_MORE_FILES);
@@ -941,12 +972,16 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 return 0;
             } else if (LOWORD(wParam) == ID_FILE_OPEN) {
                 if (auto opt = OpenFile(hWnd, *m_fileProviders); opt) {
-                    ChecksumProvider* checksum_provider = m_fileProviders->getMatchingProviderFor(convertToUtf8(*opt));
+                    auto const& [source_file_path, selected_provider] = *opt;
+                    ChecksumProvider* const checksum_provider =
+                        ((selected_provider == 0) || (selected_provider - 1 >= m_fileProviders->fileTypes().size())) ?
+                        m_fileProviders->getMatchingProviderFor(convertToUtf8(source_file_path)) :
+                        m_fileProviders->getProviderFromIndex(selected_provider - 1);
                     if (checksum_provider) {
                         m_scheduler->post(VerifyOperation{
                             .event_handler = this,
                             .options = m_options,
-                            .source_file = *opt,
+                            .source_file = source_file_path,
                             .provider = checksum_provider
                         });
                     }
@@ -963,16 +998,12 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     m_options.has_avx512 = true;
                 }
                 SetMenuItemInfo(m_hMenu, ID_OPTIONS_USEAVX512, FALSE, &mii);
-            } else if ((LOWORD(wParam) == ID_CREATE_CRC) || (LOWORD(wParam) == ID_CREATE_MD5)) {
-                ChecksumProvider* checksum_provider = nullptr;
-                if (LOWORD(wParam) == ID_CREATE_MD5) {
-                    checksum_provider = m_fileProviders->getMatchingProviderFor(u8"*.md5");
-                }
-                if (!checksum_provider) { return 0; }
+            } else if (LOWORD(wParam) == ID_CREATE_FROM_FOLDER) {
                 if (auto const opt = OpenFolder(hWnd); opt) {
-                    ChecksumFile new_file;
-                    HasherOptions hasher_options{ .has_sse42 = true, .has_avx512 = false };
                     if (auto const opt_s = SaveFile(hWnd, *m_fileProviders); opt_s) {
+                        /*
+                        ChecksumFile new_file;
+                        HasherOptions hasher_options{ .has_sse42 = true, .has_avx512 = false };
                         for (FileInfo const& info : iterateFiles(*opt)) {
                             new_file.addEntry(convertToUtf8(info.relative_path),
                                 hashFile(checksum_provider->createHasher(hasher_options), info.absolute_path, info.size));
@@ -980,6 +1011,7 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                         FileOutputWin32 writer(*opt_s);
                         new_file.sortEntries();
                         checksum_provider->serialize(writer, new_file);
+                        */
                     }
                 }
                 return 0;
@@ -1006,11 +1038,11 @@ LRESULT MainWindow::populateListView(NMHDR* nmh) {
             if (disp_info->item.iSubItem == 0) {
                 // name
                 _tcsncpy_s(disp_info->item.pszText, disp_info->item.cchTextMax,
-                    toWcharStr(entry.name.c_str()), _TRUNCATE);
+                    toWcharStr(entry.name), _TRUNCATE);
             } else if (disp_info->item.iSubItem == 1) {
                 // checksum
                 _tcsncpy_s(disp_info->item.pszText, disp_info->item.cchTextMax,
-                    toWcharStr(entry.checksum.c_str()), _TRUNCATE);
+                    toWcharStr(entry.checksum), _TRUNCATE);
             } else if (disp_info->item.iSubItem == 2) {
                 // status
                 TCHAR const* status_text[] = { TEXT("OK"), TEXT("FAILED. Checksum mismatch"), TEXT("FAILED. File does not exist"), TEXT("") };
@@ -1163,7 +1195,7 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
     struct {
         TCHAR* name;
         int width;
-    } columns[] = { { column_name1, 110 }, { column_name2, 110 }, { column_name3, 160 } };
+    } columns[] = { { column_name1, 150 }, { column_name2, 110 }, { column_name3, 105 } };
     for (int i = 0; i < 3; ++i) {
         LV_COLUMN lv_column{
             .mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM,

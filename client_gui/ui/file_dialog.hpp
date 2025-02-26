@@ -46,8 +46,13 @@ enum class FileDialogAction {
     SaveAs,
 };
 
-std::optional<std::u16string> FileDialog(HWND parent_window, FileDialogAction action, 
-                                         LPCWSTR dialog_title, std::span<COMDLG_FILTERSPEC const> filter_types);
+struct FileDialogResult {
+    std::u16string path;
+    UINT selected_file_type;
+};
+
+std::optional<FileDialogResult> FileDialog(HWND parent_window, FileDialogAction action,
+                                           LPCWSTR dialog_title, std::span<COMDLG_FILTERSPEC const> filter_types);
 
 }
 
