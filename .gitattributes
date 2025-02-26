@@ -10,10 +10,13 @@
 *.hpp text
 *.txt text
 *.svg text
-*.rc text text eol=lf
 
 # Declare files that will always have CRLF line endings on checkout.
 *.sln text eol=crlf
+*.manifest.in binary
+*.rc text working-tree-encoding=UTF-16LE-BOM eol=crlf
+*.rc.in text working-tree-encoding=UTF-16LE-BOM eol=crlf
+resouce/resouce.h  text text eol=crlf
 
 # Denote all files that are truly binary and should not be modified.
 *.png binary

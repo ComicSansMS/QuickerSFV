@@ -5,9 +5,12 @@ set(QUICKER_SFV_PROJECT_VERSION_MINOR 1)
 set(QUICKER_SFV_PROJECT_VERSION_PATCH 0)
 
 if (NOT QUICKER_SFV_BUILD_RELEASE)
-    string(TIMESTAMP QUICKER_SFV_PROJECT_VERSION_TWEAK "%Y%m%d")
+    string(TIMESTAMP QUICKER_SFV_PROJECT_VERSION_TWEAK "%y%j")
 else()
     set(QUICKER_SFV_PROJECT_VERSION_TWEAK 0)
+endif()
+if (QUICKER_SFV_PROJECT_VERSION_TWEAK GREATER 65535)
+    message(FATAL_ERROR "Invalid tweak version number (must be smaller than 65536): ${QUICKER_SFV_PROJECT_VERSION_TWEAK}")
 endif()
 set(QUICKER_SFV_PROJECT_VERSION ${QUICKER_SFV_PROJECT_VERSION_MAJOR}.${QUICKER_SFV_PROJECT_VERSION_MINOR}.${QUICKER_SFV_PROJECT_VERSION_PATCH}.${QUICKER_SFV_PROJECT_VERSION_TWEAK})
 
@@ -114,6 +117,20 @@ endif()
 
 if(MSVC)
     add_executable(QuickerSFV WIN32)
+    configure_file(
+        ${PROJECT_SOURCE_DIR}/resource/quicker_sfv.manifest.in
+        ${PROJECT_BINARY_DIR}/generated/resource/quicker_sfv.manifest
+        @ONLY
+    )
+    file(COPY
+        ${PROJECT_SOURCE_DIR}/resource/checkmark.ico
+        ${PROJECT_SOURCE_DIR}/resource/cross.ico
+        ${PROJECT_SOURCE_DIR}/resource/info.ico
+        ${PROJECT_SOURCE_DIR}/resource/quicker_sfv.ico
+        ${PROJECT_SOURCE_DIR}/resource/quicker_sfv.rc
+        ${PROJECT_SOURCE_DIR}/resource/resource.h
+        DESTINATION ${PROJECT_BINARY_DIR}/generated/resource
+    )
     target_sources(QuickerSFV
         PRIVATE
         ${PROJECT_SOURCE_DIR}/QuickerSFV.cpp
@@ -126,12 +143,12 @@ if(MSVC)
         ${PROJECT_SOURCE_DIR}/client_gui/ui/enforce.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/ui/file_dialog.hpp
         PRIVATE
-        ${PROJECT_SOURCE_DIR}/resource/quicker_sfv.rc
+        ${PROJECT_BINARY_DIR}/generated/resource/quicker_sfv.rc
         PRIVATE
         FILE_SET HEADERS
-        BASE_DIRS ${PROJECT_SOURCE_DIR}/resource
+        BASE_DIRS ${PROJECT_BINARY_DIR}/generated/resource
         FILES
-        ${PROJECT_SOURCE_DIR}/resource/resource.h
+        ${PROJECT_BINARY_DIR}/generated/resource/resource.h
     )
     target_compile_options(QuickerSFV PRIVATE
       $<$<CXX_COMPILER_ID:MSVC>:/W4>

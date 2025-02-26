@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v3" manifestVersion="1.0">
+  <assemblyIdentity type="win32" version="@QUICKER_SFV_PROJECT_VERSION_MAJOR@.@QUICKER_SFV_PROJECT_VERSION_MINOR@.@QUICKER_SFV_PROJECT_VERSION_PATCH@.@QUICKER_SFV_PROJECT_VERSION_TWEAK@" name="QuickerSFV" />
+  <trustInfo>
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"></requestedExecutionLevel>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+  <application>
+    <windowsSettings xmlns:ws2="http://schemas.microsoft.com/SMI/2016/WindowsSettings">
+      <ws2:longPathAware>true</ws2:longPathAware>
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+    </windowsSettings>
+  </application>
+</assembly>
