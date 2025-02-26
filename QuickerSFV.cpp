@@ -287,10 +287,10 @@ std::u16string resolvePath(std::u16string const& path) {
     return ret;
 }
 
-LPCTSTR formatString(LPWSTR out_buffer, size_t buffer_size, LPCTSTR format, ...) {
+LPCTSTR formatString(LPTSTR out_buffer, size_t buffer_size, LPCTSTR format, ...) {
     va_list args;
     va_start(args, format);
-    HRESULT hres = StringCchVPrintfW(out_buffer, buffer_size, format, args);
+    HRESULT hres = StringCchVPrintf(out_buffer, buffer_size, format, args);
     va_end(args);
     return out_buffer;
 }
@@ -478,9 +478,10 @@ void Scheduler::doVerify(OperationState& op) {
             read_offset += front_buffer.size();
 
             DWORD bytes_read = 0;
-            HANDLE event_handles[] = { event_front, m_cancelEvent };
+            // cancel event has to go first, or it will get starved by completing i/os
+            HANDLE event_handles[] = { m_cancelEvent, event_front };
             DWORD const wait_ret = WaitForMultipleObjects(2, event_handles, FALSE, INFINITE);
-            if (wait_ret == WAIT_OBJECT_0) {
+            if (wait_ret == WAIT_OBJECT_0 + 1) {
                 // read successful
                 front_pending = false;
                 if (!GetOverlappedResult(fin, overlapped_front, &bytes_read, FALSE)) {
@@ -493,7 +494,7 @@ void Scheduler::doVerify(OperationState& op) {
                         break;
                     }
                 }
-            } else if (wait_ret == WAIT_OBJECT_0 + 1) {
+            } else if (wait_ret == WAIT_OBJECT_0) {
                 // cancel
                 CancelIo(fin);
                 is_canceled = true;
@@ -1186,6 +1187,7 @@ void MainWindow::onFileCompleted(std::u8string_view file, Digest const& checksum
         break;
     }
     ListView_SetItemCount(m_hListView, m_listEntries.size());
+    ListView_EnsureVisible(m_hListView, m_listEntries.size() - 1, FALSE);
     UpdateStats();
 }
 
@@ -1204,6 +1206,7 @@ void MainWindow::onCheckCompleted(Result r) {
         m_listEntries.push_back(ListViewEntry{ .name = u"@todo files failed", .checksum = {}, .status = ListViewEntry::Status::FailedMismatch });
     }
     ListView_SetItemCount(m_hListView, m_listEntries.size());
+    ListView_EnsureVisible(m_hListView, m_listEntries.size() - 1, FALSE);
     UpdateStats();
 }
 
