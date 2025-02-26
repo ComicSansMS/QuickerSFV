@@ -38,11 +38,14 @@
 #include <resource.h>
 
 #include <algorithm>
+#include <array>
 #include <bit>
+#include <chrono>
 #include <cstring>
 #include <generator>
 #include <limits>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <utility>
 #include <variant>
@@ -75,7 +78,7 @@ public:
     };
 
     virtual void onCheckStarted(uint32_t n_files) = 0;
-    virtual void onProgress(std::u8string_view file, uint32_t percentage) = 0;
+    virtual void onProgress(std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s) = 0;
     virtual void onFileCompleted(std::u8string_view file, Digest const& checksum, CompletionStatus status) = 0;
     virtual void onCheckCompleted(Result r) = 0;
     virtual void onCancelRequested() = 0;
@@ -130,6 +133,7 @@ private:
         struct EProgress {
             std::u8string file;
             uint32_t percentage;
+            uint32_t bandwidth_mib_s;
         };
         struct EFileCompleted {
             std::u8string file;
@@ -169,7 +173,7 @@ private:
     void doVerify(OperationState& op);
 
     void signalCheckStarted(EventHandler* recipient, uint32_t n_files);
-    void signalProgress(EventHandler* recipient, std::u8string_view file, uint32_t percentage);
+    void signalProgress(EventHandler* recipient, std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s);
     void signalFileCompleted(EventHandler* recipient, std::u8string_view file, Digest checksum, EventHandler::CompletionStatus status);
     void signalCheckCompleted(EventHandler* recipient, EventHandler::Result r);
     void signalCancelRequested(EventHandler* recipient);
@@ -367,6 +371,31 @@ public:
     HandleGuard& operator=(HandleGuard&&) = delete;
 };
 
+template<typename T, size_t N>
+class SlidingWindow {
+private:
+    std::array<T, N> m_elements;
+    size_t m_numberOfElements = 0;
+    size_t m_nextElement = 0;
+public:
+    void push(T&& e) {
+        m_elements[m_nextElement] = std::move(e);
+        m_nextElement = (m_nextElement + 1) % N;
+        m_numberOfElements = std::min(m_numberOfElements + 1, N);
+    }
+
+    void push(T const& e) {
+        m_elements[m_nextElement] = e;
+        m_nextElement = (m_nextElement + 1) % N;
+        m_numberOfElements = std::min(m_numberOfElements + 1, N);
+    }
+
+    T rollingAverage() const {
+        if (m_numberOfElements == 0) { return T{}; }
+        return std::accumulate(begin(m_elements), begin(m_elements) + m_numberOfElements, T{}) / m_numberOfElements;
+    }
+};
+
 void Scheduler::doVerify(OperationState& op) {
     auto const offsetLow = [](size_t i) -> DWORD { return static_cast<DWORD>(i & 0xffffffffull); };
     auto const offsetHigh = [](size_t i) -> DWORD { return static_cast<DWORD>((i >> 32ull) & 0xffffffffull); };
@@ -401,14 +430,18 @@ void Scheduler::doVerify(OperationState& op) {
     std::vector<char> back_buffer;
     back_buffer.resize(BUFFER_SIZE);
 
+    std::chrono::steady_clock::time_point t_front;
+    std::chrono::steady_clock::time_point t_back;
+
     uint32_t last_progress = 0;
 
     for (auto const& f : op.checksum_file.getEntries()) {
+        SlidingWindow<std::chrono::nanoseconds, 10> bandwidth_track;
         op.hasher->reset();
 
         std::u16string const file_path = resolvePath(base_path + convertToUtf16(f.path));
         HANDLE fin = CreateFile(toWcharStr(file_path.c_str()), GENERIC_READ, FILE_SHARE_READ, nullptr,
-                                OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED | FILE_FLAG_NO_BUFFERING,
+                                OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED,
                                 nullptr);
         if (fin == INVALID_HANDLE_VALUE) {
             // file missing
@@ -442,6 +475,7 @@ void Scheduler::doVerify(OperationState& op) {
             .OffsetHigh = offsetHigh(read_offset),
             .hEvent = event_front
         };
+        t_front = std::chrono::steady_clock::now();
         if (!ReadFile(fin, front_buffer.data(), BUFFER_SIZE, nullptr, overlapped_front)) {
             DWORD const err = GetLastError();
             if (err == ERROR_HANDLE_EOF) {
@@ -462,6 +496,7 @@ void Scheduler::doVerify(OperationState& op) {
                     .OffsetHigh = offsetHigh(read_offset),
                     .hEvent = event_back
             };
+            t_back = std::chrono::steady_clock::now();
             if (!ReadFile(fin, back_buffer.data(), BUFFER_SIZE, nullptr, overlapped_back)) {
                 DWORD const err = GetLastError();
                 if (err == ERROR_HANDLE_EOF) {
@@ -493,6 +528,8 @@ void Scheduler::doVerify(OperationState& op) {
                         is_error = true;
                         break;
                     }
+                } else {
+                    if (bytes_read == BUFFER_SIZE) { bandwidth_track.push(std::chrono::steady_clock::now() - t_front); }
                 }
             } else if (wait_ret == WAIT_OBJECT_0) {
                 // cancel
@@ -508,7 +545,9 @@ void Scheduler::doVerify(OperationState& op) {
             bytes_hashed += bytes_read;
             uint32_t current_progress = static_cast<uint32_t>(bytes_hashed * 100 / file_size);
             if (current_progress != last_progress) {
-                signalProgress(op.event_handler, f.path, current_progress);
+                int64_t const t_avg = bandwidth_track.rollingAverage().count();
+                uint32_t bandwidth_mib_s = (t_avg) ? ((static_cast<int64_t>(BUFFER_SIZE) * 1'000'000'000ll) / (t_avg * 1'048'576ll)) : 0;
+                signalProgress(op.event_handler, f.path, current_progress, bandwidth_mib_s);
                 last_progress = current_progress;
             }
 
@@ -516,6 +555,7 @@ void Scheduler::doVerify(OperationState& op) {
             std::swap(event_front, event_back);
             std::swap(overlapped_front, overlapped_back);
             std::swap(front_pending, back_pending);
+            std::swap(t_front, t_back);
         }
         if (front_pending) { WaitForSingleObject(event_front, INFINITE); DWORD b; GetOverlappedResult(fin, overlapped_front, &b, TRUE); }
         if (back_pending) { WaitForSingleObject(event_back, INFINITE); DWORD b; GetOverlappedResult(fin, overlapped_back, &b, TRUE); }
@@ -545,13 +585,14 @@ void Scheduler::signalCheckStarted(EventHandler* recipient, uint32_t n_files) {
     });
 }
 
-void Scheduler::signalProgress(EventHandler* recipient, std::u8string_view file, uint32_t percentage) {
+void Scheduler::signalProgress(EventHandler* recipient, std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s) {
     std::scoped_lock lk(m_mtxEvents);
     m_eventsQueue.emplace_back(Event {
         .recipient = recipient,
         .event = Event::EProgress {
             .file = std::u8string(file),
-            .percentage = percentage
+            .percentage = percentage,
+            .bandwidth_mib_s = bandwidth_mib_s
         }
     });
     PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
@@ -618,7 +659,7 @@ void Scheduler::dispatchEvent(EventHandler* recipient, Event::ECheckStarted cons
 }
 
 void Scheduler::dispatchEvent(EventHandler* recipient, Event::EProgress const& e) {
-    recipient->onProgress(e.file, e.percentage);
+    recipient->onProgress(e.file, e.percentage, e.bandwidth_mib_s);
 }
 
 void Scheduler::dispatchEvent(EventHandler* recipient, Event::EFileCompleted const& e) {
@@ -712,6 +753,7 @@ private:
         uint32_t ok;
         uint32_t bad;
         uint32_t missing;
+        uint32_t bandwidth;
     } m_stats;
     struct ListViewEntry {
         std::u16string name;
@@ -745,7 +787,7 @@ public:
 
 
     void onCheckStarted(uint32_t n_files) override;
-    void onProgress(std::u8string_view file, uint32_t percentage) override;
+    void onProgress(std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s) override;
     void onFileCompleted(std::u8string_view file, Digest const& checksum, CompletionStatus status) override;
     void onCheckCompleted(Result r) override;
     void onCancelRequested() override;
@@ -1163,15 +1205,17 @@ void MainWindow::onCheckStarted(uint32_t n_files) {
     ListView_SetItemCount(m_hListView, 1);
 }
 
-void MainWindow::onProgress(std::u8string_view file, uint32_t percentage) {
+void MainWindow::onProgress(std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s) {
     UNREFERENCED_PARAMETER(file);
     m_stats.progress = percentage;
+    m_stats.bandwidth = bandwidth_mib_s;
     UpdateStats();
 }
 
 void MainWindow::onFileCompleted(std::u8string_view file, Digest const& checksum, CompletionStatus status) {
     ++m_stats.completed;
     m_stats.progress = 0;
+    m_stats.bandwidth = 0;
     switch (status) {
     case CompletionStatus::Ok:
         m_listEntries.push_back(ListViewEntry{ .name = convertToUtf16(file), .checksum = convertToUtf16(checksum.toString()), .status = ListViewEntry::Status::Ok});
@@ -1197,6 +1241,7 @@ void MainWindow::onCheckCompleted(Result r) {
     m_stats.missing = r.missing;
     m_stats.completed = r.ok + r.bad + r.missing;
     m_stats.progress = 0;
+    m_stats.bandwidth = 0;
     m_listEntries.push_back(ListViewEntry{ .name = u"@todo files checked", .checksum = {}, .status = ListViewEntry::Status::Information});
     if ((m_stats.missing == 0) && (m_stats.bad == 0)) {
         m_listEntries.push_back(ListViewEntry{ .name = u"All files OK", .checksum = {}, .status = ListViewEntry::Status::Ok });
@@ -1228,7 +1273,7 @@ void MainWindow::UpdateStats() {
     if (m_stats.progress == 0) {
         Static_SetText(m_hTextFieldLeft, formatString(buffer, buffer_size, TEXT("Completed files: %d/%d\nOk: %d"), m_stats.completed, m_stats.total, m_stats.ok));
     } else {
-        Static_SetText(m_hTextFieldLeft, formatString(buffer, buffer_size, TEXT("Completed files: %d/%d (File: %d%%)\nOk: %d"), m_stats.completed, m_stats.total, m_stats.progress, m_stats.ok));
+        Static_SetText(m_hTextFieldLeft, formatString(buffer, buffer_size, TEXT("Completed files: %d/%d (File: %d%% %dMiB/s)\nOk: %d"), m_stats.completed, m_stats.total, m_stats.progress, m_stats.bandwidth, m_stats.ok));
     }
     Static_SetText(m_hTextFieldRight, formatString(buffer, buffer_size, TEXT("Bad: %d\nMissing: %d"), m_stats.bad, m_stats.missing));
 }
