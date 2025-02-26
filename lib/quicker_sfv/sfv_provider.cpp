@@ -1,8 +1,9 @@
 #include <quicker_sfv/sfv_provider.hpp>
 
-#include <quicker_sfv/crc32.hpp>
 #include <quicker_sfv/error.hpp>
 #include <quicker_sfv/line_reader.hpp>
+
+#include <quicker_sfv/detail/crc32.hpp>
 
 namespace quicker_sfv {
 

@@ -4,14 +4,6 @@
 
 namespace quicker_sfv {
 
-Version getVersion() {
-    return Version{
-        .major = 1,
-        .minor = 0,
-        .patch = 0
-    };
-}
-
 bool supportsAvx512() {
     return crc::supportsAvx512();
 }

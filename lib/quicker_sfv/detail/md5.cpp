@@ -1,7 +1,7 @@
-#include <quicker_sfv/md5.hpp>
+#include <quicker_sfv/detail/md5.hpp>
 
 #include <quicker_sfv/error.hpp>
-#include <quicker_sfv/string_conversion.hpp>
+#include <quicker_sfv/detail/string_conversion.hpp>
 
 #include <openssl/md5.h>
 

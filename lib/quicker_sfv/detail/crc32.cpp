@@ -1,8 +1,8 @@
-#include <quicker_sfv/crc32.hpp>
+#include <quicker_sfv/detail/crc32.hpp>
 
 #include <quicker_sfv/error.hpp>
 #include <quicker_sfv/digest.hpp>
-#include <quicker_sfv/string_conversion.hpp>
+#include <quicker_sfv/detail/string_conversion.hpp>
 
 #include <fast_crc32.hpp>
 

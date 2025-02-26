@@ -1,0 +1,15 @@
+// @QUICKER_SFV_CMAKE_GENERATED_FILE@
+
+#include <quicker_sfv/version.hpp>
+
+namespace quicker_sfv {
+
+Version getVersion() {
+    return Version {
+        .major = @QUICKER_SFV_PROJECT_VERSION_MAJOR@,
+        .minor = @QUICKER_SFV_PROJECT_VERSION_MINOR@,
+        .patch = @QUICKER_SFV_PROJECT_VERSION_PATCH@,
+    };
+}
+
+}

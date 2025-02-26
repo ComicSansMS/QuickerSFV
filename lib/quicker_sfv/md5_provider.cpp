@@ -2,7 +2,8 @@
 
 #include <quicker_sfv/error.hpp>
 #include <quicker_sfv/line_reader.hpp>
-#include <quicker_sfv/md5.hpp>
+
+#include <quicker_sfv/detail/md5.hpp>
 
 #include <memory>
 
