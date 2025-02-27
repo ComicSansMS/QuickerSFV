@@ -429,8 +429,8 @@ public:
 };
 
 void Scheduler::doVerify(OperationState& op) {
-    auto const offsetLow = [](size_t i) -> DWORD { return static_cast<DWORD>(i & 0xffffffffull); };
-    auto const offsetHigh = [](size_t i) -> DWORD { return static_cast<DWORD>((i >> 32ull) & 0xffffffffull); };
+    auto const offsetLow = [](int64_t i) -> DWORD { return static_cast<DWORD>(i & 0xffffffffull); };
+    auto const offsetHigh = [](int64_t i) -> DWORD { return static_cast<DWORD>((i >> 32ull) & 0xffffffffull); };
 
     std::u16string const base_path = [](std::u16string_view checksum_file_path) -> std::u16string {
         auto it_slash = std::find(checksum_file_path.rbegin(), checksum_file_path.rend(), u'\\').base();
@@ -483,12 +483,12 @@ void Scheduler::doVerify(OperationState& op) {
         }
         HandleGuard guard_fin(fin);
 
-        size_t read_offset = 0;
-        size_t bytes_hashed = 0;
+        int64_t read_offset = 0;
+        int64_t bytes_hashed = 0;
         bool is_eof = false;
         bool is_canceled = false;
         bool is_error = false;
-        size_t const file_size = [&is_error, fin]() -> size_t {
+        int64_t const file_size = [&is_error, fin]() -> int64_t {
             LARGE_INTEGER l_file_size;
             if (!GetFileSizeEx(fin, &l_file_size)) {
                 is_error = true;
@@ -1050,7 +1050,7 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 LRESULT MainWindow::populateListView(NMHDR* nmh) {
     if (nmh->code == LVN_GETDISPINFO) {
         NMLVDISPINFO* disp_info = std::bit_cast<NMLVDISPINFO*>(nmh);
-        if (disp_info->item.iItem > m_listEntries.size()) { enforce(!"Should never happen"); return 0; }
+        if ((disp_info->item.iItem < 0) || (static_cast<size_t>(disp_info->item.iItem) >= m_listEntries.size())) { enforce(!"Should never happen"); return 0; }
         ListViewEntry& entry = m_listEntries[disp_info->item.iItem];
         if (disp_info->item.mask & LVIF_TEXT) {
             if (disp_info->item.iSubItem == 0) {
@@ -1154,7 +1154,13 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
         return -1;
     }
     WORD const cyChar = HIWORD(GetDialogBaseUnits());
-    m_hTextFieldLeft = CreateWindow(TEXT("STATIC"),
+    HMENU const field_left_id =
+#ifdef _WIN64
+        std::bit_cast<HMENU>(0x123ull);
+#else
+        std::bit_cast<HMENU>(0x123u);
+#endif
+    m_hTextFieldLeft = CreateWindowW(TEXT("STATIC"),
         TEXT(""),
         WS_CHILD | SS_LEFT | WS_VISIBLE | SS_SUNKEN,
         0,
@@ -1162,7 +1168,7 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
         (parent_rect.right - parent_rect.left) / 2,
         cyChar * 2,
         parent_hwnd,
-        std::bit_cast<HMENU>(0x123ull),
+        field_left_id,
         m_hInstance,
         0
     );
@@ -1171,6 +1177,12 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
         return -1;
     }
     Static_SetText(m_hTextFieldLeft, TEXT("Completed files: 0/0\nOk: 0"));
+    HMENU const field_right_id =
+#ifdef _WIN64
+        std::bit_cast<HMENU>(0x124ull);
+#else
+        std::bit_cast<HMENU>(0x124u);
+#endif
     m_hTextFieldRight = CreateWindow(TEXT("STATIC"),
         TEXT(""),
         WS_CHILD | SS_LEFT | WS_VISIBLE | SS_SUNKEN,
@@ -1179,7 +1191,7 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
         (parent_rect.right - parent_rect.left) / 2,
         cyChar * 2,
         parent_hwnd,
-        std::bit_cast<HMENU>(0x124ull),
+        field_right_id,
         m_hInstance,
         0
     );
@@ -1189,6 +1201,12 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
     }
     Static_SetText(m_hTextFieldRight, TEXT("Bad: 0\nMissing: 0"));
 
+    HMENU const list_view_id =
+#ifdef _WIN64
+        std::bit_cast<HMENU>(0x125ull);
+#else
+        std::bit_cast<HMENU>(0x125u);
+#endif
     m_hListView = CreateWindowEx(WS_EX_CLIENTEDGE,
         WC_LISTVIEW,
         TEXT("Blub"),
@@ -1198,7 +1216,7 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
         parent_rect.right - parent_rect.left,
         parent_rect.bottom - cyChar * 2,
         parent_hwnd,
-        std::bit_cast<HMENU>(0x125ull),
+        list_view_id,
         m_hInstance,
         0
     );

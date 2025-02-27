@@ -21,16 +21,16 @@ private:
     FileDialogEventHandler& operator=(FileDialogEventHandler const&) = delete;
 public:
     explicit FileDialogEventHandler(std::span<COMDLG_FILTERSPEC const> filter_types);
-    HRESULT QueryInterface(IID const& iid, void** ppv) override;
-    ULONG AddRef() override;
-    ULONG Release() override;
-    HRESULT OnFileOk(IFileDialog* pfd) override;
-    HRESULT OnFolderChanging(IFileDialog* pfd, IShellItem* psiFolder) override;
-    HRESULT OnFolderChange(IFileDialog* pfd) override;
-    HRESULT OnSelectionChange(IFileDialog* pfd) override;
-    HRESULT OnShareViolation(IFileDialog* pfd, IShellItem* psi, FDE_SHAREVIOLATION_RESPONSE* pResponse) override;
-    HRESULT OnTypeChange(IFileDialog* pfd) override;
-    HRESULT OnOverwrite(IFileDialog* pfd, IShellItem* psi, FDE_OVERWRITE_RESPONSE* pResponse) override;
+    HRESULT STDMETHODCALLTYPE QueryInterface(IID const& iid, void** ppv) override;
+    ULONG STDMETHODCALLTYPE AddRef() override;
+    ULONG STDMETHODCALLTYPE Release() override;
+    HRESULT STDMETHODCALLTYPE OnFileOk(IFileDialog* pfd) override;
+    HRESULT STDMETHODCALLTYPE OnFolderChanging(IFileDialog* pfd, IShellItem* psiFolder) override;
+    HRESULT STDMETHODCALLTYPE OnFolderChange(IFileDialog* pfd) override;
+    HRESULT STDMETHODCALLTYPE OnSelectionChange(IFileDialog* pfd) override;
+    HRESULT STDMETHODCALLTYPE OnShareViolation(IFileDialog* pfd, IShellItem* psi, FDE_SHAREVIOLATION_RESPONSE* pResponse) override;
+    HRESULT STDMETHODCALLTYPE OnTypeChange(IFileDialog* pfd) override;
+    HRESULT STDMETHODCALLTYPE OnOverwrite(IFileDialog* pfd, IShellItem* psi, FDE_OVERWRITE_RESPONSE* pResponse) override;
 };
 
 CComPtr<FileDialogEventHandler> createFileDialogEventHandler(std::span<COMDLG_FILTERSPEC const> filter_types);
