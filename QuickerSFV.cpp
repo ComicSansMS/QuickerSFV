@@ -823,6 +823,8 @@ public:
 
     LRESULT WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+    HWND getHwnd() const;
+    HasherOptions getOptions() const;
 
     void onCheckStarted(uint32_t n_files) override;
     void onProgress(std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s) override;
@@ -1261,6 +1263,14 @@ void MainWindow::resize() {
     MoveWindow(m_hListView, 0, textFieldHeight, new_width, rect.bottom - textFieldHeight, TRUE);
 }
 
+HWND MainWindow::getHwnd() const {
+    return m_hWnd;
+}
+
+HasherOptions MainWindow::getOptions() const {
+    return m_options;
+}
+
 void MainWindow::onCheckStarted(uint32_t n_files) {
     ListView_DeleteAllItems(m_hListView);
     m_listEntries.clear();
@@ -1368,6 +1378,101 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return main_window_ptr->WndProc(hWnd, msg, wParam, lParam);
 }
 
+std::vector<std::u8string> commandLineLexer(std::u8string_view str) {
+    std::vector<std::u8string> args;
+    enum class Status {
+        StartOfArg,
+        InArg,
+        InQuotes,
+    } status = Status::StartOfArg;
+    args.emplace_back();
+    auto end_of_arg = [&args]() {
+        if (!checkValidUtf8(std::span<std::byte const>(reinterpret_cast<std::byte const*>(args.back().data()), args.back().size()))) {
+            throwException(Error::ParserError);
+        }
+        args.emplace_back();
+    };
+    for (std::u8string_view::size_type i = 0; i < str.size(); ++i) {
+        char8_t const c = str[i];
+        if (c == u8'\\') {
+            if (i + 1 < str.size()) {
+                if (str[i + 1] == u8'\\') {
+                    args.back().push_back(u8'\\');
+                    ++i;
+                    continue;
+                } else if (str[i + 1] == u8'"') {
+                    args.back().push_back(u8'"');
+                    ++i;
+                    continue;
+                }
+            }
+        }
+        switch (status) {
+        case Status::StartOfArg:
+            switch (c) {
+            case u8' ': [[fallthrough]];
+            case u8'\t':
+                // skip whitespace
+                break;
+            case u8'"':
+                status = Status::InQuotes;
+                break;
+            default:
+                status = Status::InArg;
+                args.back().push_back(c);
+                break;
+            }
+            break;
+        case Status::InArg:
+            switch (c) {
+            case u8' ': [[fallthrough]];
+            case u8'\t':
+                end_of_arg();
+                status = Status::StartOfArg;
+                break;
+            default:
+                args.back().push_back(c);
+                break;
+            }
+            break;
+        case Status::InQuotes:
+            switch (c) {
+            case u8'"':
+                // double quotes are interpreted as literal quotes
+                if ((i + 1 < str.size()) && (str[i + 1] == u8'"')) {
+                    args.back().push_back(u8'"');
+                    ++i;
+                } else {
+                    end_of_arg();
+                    status = Status::StartOfArg;
+                }
+                break;
+            default:
+                args.back().push_back(c);
+                break;
+            }
+            break;
+        }
+    }
+    if (!args.back().empty()) { end_of_arg(); }
+    args.pop_back();
+    return args;
+}
+
+struct CommandLineOptions {
+    std::vector<std::u16string> filesToCheck;
+};
+
+
+CommandLineOptions parseCommandLine(std::u8string_view str) {
+    std::vector<std::u8string> const args = commandLineLexer(str);
+    CommandLineOptions opts;
+    for (auto const& f : args) {
+        opts.filesToCheck.push_back(convertToUtf16(f));
+    }
+    return opts;
+}
+
 int APIENTRY WinMain(HINSTANCE hInstance,
                      HINSTANCE /* hPrevInstance */,
                      LPSTR     lpCmdLine,
@@ -1375,10 +1480,12 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 {
     enforce(GetACP() == 65001);  // utf-8 codepage
 
-    FileProviders file_providers;
-
     TCHAR const class_name[] = TEXT("quicker_sfv");
     TCHAR const window_title[] = TEXT("QuickerSFV");
+
+    CommandLineOptions const command_line_opts = parseCommandLine(assumeUtf8(lpCmdLine));
+
+    FileProviders file_providers;
 
     WNDCLASS wndClass{
         .style = CS_HREDRAW | CS_VREDRAW,
@@ -1406,6 +1513,22 @@ int APIENTRY WinMain(HINSTANCE hInstance,
     }
 
     scheduler.start();
+
+    for (auto const& f : command_line_opts.filesToCheck) {
+        auto* p = file_providers.getMatchingProviderFor(convertToUtf8(f));
+        if (!p) {
+            auto const msg = formatString(1111, TEXT("Cannot determine format for filename: \"%s\""), f.c_str());
+            MessageBox(main_window.getHwnd(), toWcharStr(msg), window_title, MB_ICONERROR | MB_OK);
+            continue;
+        }
+        scheduler.post(VerifyOperation{
+            .event_handler = &main_window,
+            .options = main_window.getOptions(),
+            .source_file = f,
+            .provider = p
+        });
+    }
+
     MSG message;
     for (;;) {
         scheduler.run();
