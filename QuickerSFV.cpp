@@ -17,6 +17,7 @@
 */
 #include <quicker_sfv/quicker_sfv.hpp>
 
+#include <ui/command_line_parser.hpp>
 #include <ui/enforce.hpp>
 #include <ui/file_dialog.hpp>
 
@@ -1378,101 +1379,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return main_window_ptr->WndProc(hWnd, msg, wParam, lParam);
 }
 
-std::vector<std::u8string> commandLineLexer(std::u8string_view str) {
-    std::vector<std::u8string> args;
-    enum class Status {
-        StartOfArg,
-        InArg,
-        InQuotes,
-    } status = Status::StartOfArg;
-    args.emplace_back();
-    auto end_of_arg = [&args]() {
-        if (!checkValidUtf8(std::span<std::byte const>(reinterpret_cast<std::byte const*>(args.back().data()), args.back().size()))) {
-            throwException(Error::ParserError);
-        }
-        args.emplace_back();
-    };
-    for (std::u8string_view::size_type i = 0; i < str.size(); ++i) {
-        char8_t const c = str[i];
-        if (c == u8'\\') {
-            if (i + 1 < str.size()) {
-                if (str[i + 1] == u8'\\') {
-                    args.back().push_back(u8'\\');
-                    ++i;
-                    continue;
-                } else if (str[i + 1] == u8'"') {
-                    args.back().push_back(u8'"');
-                    ++i;
-                    continue;
-                }
-            }
-        }
-        switch (status) {
-        case Status::StartOfArg:
-            switch (c) {
-            case u8' ': [[fallthrough]];
-            case u8'\t':
-                // skip whitespace
-                break;
-            case u8'"':
-                status = Status::InQuotes;
-                break;
-            default:
-                status = Status::InArg;
-                args.back().push_back(c);
-                break;
-            }
-            break;
-        case Status::InArg:
-            switch (c) {
-            case u8' ': [[fallthrough]];
-            case u8'\t':
-                end_of_arg();
-                status = Status::StartOfArg;
-                break;
-            default:
-                args.back().push_back(c);
-                break;
-            }
-            break;
-        case Status::InQuotes:
-            switch (c) {
-            case u8'"':
-                // double quotes are interpreted as literal quotes
-                if ((i + 1 < str.size()) && (str[i + 1] == u8'"')) {
-                    args.back().push_back(u8'"');
-                    ++i;
-                } else {
-                    end_of_arg();
-                    status = Status::StartOfArg;
-                }
-                break;
-            default:
-                args.back().push_back(c);
-                break;
-            }
-            break;
-        }
-    }
-    if (!args.back().empty()) { end_of_arg(); }
-    args.pop_back();
-    return args;
-}
-
-struct CommandLineOptions {
-    std::vector<std::u16string> filesToCheck;
-};
-
-
-CommandLineOptions parseCommandLine(std::u8string_view str) {
-    std::vector<std::u8string> const args = commandLineLexer(str);
-    CommandLineOptions opts;
-    for (auto const& f : args) {
-        opts.filesToCheck.push_back(convertToUtf16(f));
-    }
-    return opts;
-}
-
 int APIENTRY WinMain(HINSTANCE hInstance,
                      HINSTANCE /* hPrevInstance */,
                      LPSTR     lpCmdLine,
@@ -1483,7 +1389,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
     TCHAR const class_name[] = TEXT("quicker_sfv");
     TCHAR const window_title[] = TEXT("QuickerSFV");
 
-    CommandLineOptions const command_line_opts = parseCommandLine(assumeUtf8(lpCmdLine));
+    gui::CommandLineOptions const command_line_opts = gui::parseCommandLine(assumeUtf8(lpCmdLine));
 
     FileProviders file_providers;
 

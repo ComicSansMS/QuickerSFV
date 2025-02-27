@@ -140,6 +140,7 @@ if(MSVC)
         FILE_SET HEADERS
         BASE_DIRS ${PROJECT_SOURCE_DIR}/client_gui
         FILES
+        ${PROJECT_SOURCE_DIR}/client_gui/ui/command_line_parser.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/ui/enforce.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/ui/file_dialog.hpp
         PRIVATE
@@ -162,4 +163,19 @@ if(MSVC)
     target_link_libraries(QuickerSFV PRIVATE UxTheme.lib Comctl32.lib quicker_sfv)
     target_link_options(QuickerSFV PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/MANIFEST:NO>)
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT QuickerSFV)
+    
+    if(BUILD_TESTS)
+        add_executable(quicker_sfv_ui_tests)
+        target_sources(quicker_sfv_ui_tests
+            PRIVATE
+            FILE_SET HEADERS
+            BASE_DIRS ${PROJECT_SOURCE_DIR}/client_gui
+            FILES
+            ${PROJECT_SOURCE_DIR}/client_gui/ui/command_line_parser.hpp
+            PRIVATE
+            ${PROJECT_SOURCE_DIR}/test/ui/win32_command_line_parser.t.cpp
+        )
+        target_link_libraries(quicker_sfv_ui_tests PRIVATE quicker_sfv Catch)
+        add_test(NAME "QuickerSFV UI Unit Tests" COMMAND quicker_sfv_ui_tests)
+    endif()
 endif(MSVC)
