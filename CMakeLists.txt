@@ -22,6 +22,13 @@ project(QuickerSFV
 
 find_package(OpenSSL REQUIRED)
 
+option(BUILD_TESTS "Determines whether to build tests." ON)
+if(BUILD_TESTS)
+    enable_testing()
+    include(cmake/coverage.cmake)
+    add_subdirectory(external/catch2)
+endif()
+
 add_subdirectory(external/chromium_zlib)
 
 add_library(quicker_sfv STATIC)
@@ -83,24 +90,13 @@ target_compile_options(quicker_sfv PRIVATE
 )
 target_link_libraries(quicker_sfv PRIVATE OpenSSL::Crypto chromium-zlib)
 
-option(BUILD_TESTS "Determines whether to build tests." ON)
 if(BUILD_TESTS)
-    enable_testing()
-
-    if(NOT TARGET Catch)
-        if(NOT EXISTS ${PROJECT_BINARY_DIR}/external/catch/catch.hpp)
-            file(DOWNLOAD https://github.com/catchorg/Catch2/releases/download/v2.13.10/catch.hpp ${PROJECT_BINARY_DIR}/external/catch/catch.hpp)
-        endif()
-        add_library(Catch STATIC ${PROJECT_SOURCE_DIR}/test/catch_main.cpp)
-        target_include_directories(Catch PUBLIC ${PROJECT_BINARY_DIR}/external/catch)
-    endif()
-
     add_executable(quicker_sfv_test)
     target_sources(quicker_sfv_test
         PRIVATE
         ${PROJECT_SOURCE_DIR}/test/utf.t.cpp
     )
-    target_link_libraries(quicker_sfv_test PRIVATE quicker_sfv Catch)
+    target_link_libraries(quicker_sfv_test PRIVATE quicker_sfv Catch2)
     target_compile_options(quicker_sfv_test PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
     target_compile_options(quicker_sfv_test PRIVATE
         $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
@@ -174,7 +170,7 @@ if(MSVC)
             $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
             $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -pedantic>
         )
-        target_link_libraries(quicker_sfv_ui_tests PRIVATE quicker_sfv Catch)
+        target_link_libraries(quicker_sfv_ui_tests PRIVATE quicker_sfv Catch2)
         add_test(NAME "QuickerSFV UI Unit Tests" COMMAND quicker_sfv_ui_tests)
     endif()
 endif(MSVC)
