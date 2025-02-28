@@ -133,6 +133,17 @@ END
 
 1                       RT_MANIFEST             "quicker_sfv.manifest"
 
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Accelerator
+//
+
+IDR_ACCELERATOR1 ACCELERATORS
+BEGIN
+    "^C",           ID_ACCELERATOR_COPY,    ASCII,  NOINVERT
+END
+
 #endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////
 

@@ -8,6 +8,7 @@
 #define IDI_ICON_CHECKMARK              106
 #define IDI_ICON_CROSS                  107
 #define IDI_ICON_INFO                   108
+#define IDR_ACCELERATOR1                109
 #define ID_FILE_EXIT                    40001
 #define ID_HELP_ABOUT                   40002
 #define ID_FILE_OPEN                    40003
@@ -20,13 +21,14 @@
 #define ID_CREATE_MD5                   40010
 #define ID_OPTIONS_USEAVX512            40011
 #define ID_CREATE_FROM_FOLDER           40012
+#define ID_ACCELERATOR_COPY             40013
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        109
-#define _APS_NEXT_COMMAND_VALUE         40013
+#define _APS_NEXT_RESOURCE_VALUE        110
+#define _APS_NEXT_COMMAND_VALUE         40015
 #define _APS_NEXT_CONTROL_VALUE         1001
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

@@ -982,6 +982,56 @@ Digest hashFile(HasherPtr hasher, LPCWSTR filepath, uint64_t filesize) {
     return hasher->finalize();
 }
 
+namespace {
+class GlobalAllocGuard {
+private:
+    HGLOBAL m_hmem;
+public:
+    explicit GlobalAllocGuard(HGLOBAL hmem)
+        :m_hmem(hmem)
+    {}
+    GlobalAllocGuard& operator=(GlobalAllocGuard&&) = delete;
+    ~GlobalAllocGuard() {
+        if (m_hmem) { GlobalFree(m_hmem); }
+    }
+    void release() { m_hmem = nullptr; }
+};
+
+class MemLockGuard {
+private:
+    HGLOBAL m_hmem;
+    char* m_ptr;
+public:
+    MemLockGuard& operator=(MemLockGuard&&) = delete;
+
+    explicit MemLockGuard(HGLOBAL hmem)
+        :m_hmem(hmem)
+    {
+        m_ptr = reinterpret_cast<char*>(GlobalLock(m_hmem));
+    }
+
+    ~MemLockGuard() {
+        if (m_ptr) {
+            enforce(GlobalUnlock(m_hmem) == 0);
+        }
+    }
+
+    char* operator()() {
+        return m_ptr;
+    }
+};
+
+struct ClipboardGuard {
+    ClipboardGuard& operator=(ClipboardGuard&&) = delete;
+    explicit ClipboardGuard(HWND hwnd) {
+        OpenClipboard(hwnd);
+    }
+    ~ClipboardGuard() {
+        CloseClipboard();
+    }
+};
+}
+
 LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (msg == WM_DESTROY) {
         m_scheduler->post(CancelOperation{});
@@ -1045,6 +1095,39 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     }
                 }
                 return 0;
+            }
+        } else if (LOWORD(wParam) == ID_ACCELERATOR_COPY) {
+            std::vector<ListViewEntry const*> selected_items;
+            size_t total_size = 1;
+            for (int i = 0, i_end = static_cast<int>(m_listEntries.size()); i != i_end; ++i) {
+                if (ListView_GetItemState(m_hListView, i, LVIS_SELECTED) == LVIS_SELECTED) {
+                    selected_items.push_back(&m_listEntries[i]);
+                    total_size += m_listEntries[i].name.size() + 2;
+                }
+            }
+            if (selected_items.empty()) { return 0; }
+            HGLOBAL hmem = GlobalAlloc(GHND, total_size * sizeof(TCHAR));
+            if (!hmem) { return 0; }
+            GlobalAllocGuard guard_hmem(hmem);
+            {
+                MemLockGuard mem_lock(hmem);
+                char* mem = mem_lock();
+                if (!mem) { return 0; }
+
+                size_t offset = 0;
+                for (auto const& e : selected_items) {
+                    std::memcpy(mem + offset, e->name.c_str(), e->name.size() * sizeof(TCHAR));
+                    offset += e->name.size() * sizeof(TCHAR);
+                    WCHAR const line_break[] = TEXT("\r\n");
+                    std::memcpy(mem + offset, line_break, 2*sizeof(TCHAR));
+                    offset += 2;
+                }
+            }
+            {
+                ClipboardGuard guard_clipboard(m_hWnd);
+                if (!EmptyClipboard()) { return 0; }
+                if (!SetClipboardData(CF_UNICODETEXT, hmem)) { return 0; }
+                guard_hmem.release();
             }
         }
     } else if (msg == WM_NOTIFY) {
@@ -1333,7 +1416,7 @@ void MainWindow::addListEntry(std::u16string name, std::u16string checksum, List
         .status = status,
         .original_position = static_cast<uint32_t>(m_listEntries.size())
     });
-    ListView_SetItemCount(m_hListView, m_listEntries.size());
+    ListView_SetItemCountEx(m_hListView, m_listEntries.size(), 0);
 }
 
 HWND MainWindow::getHwnd() const {
@@ -1378,7 +1461,6 @@ void MainWindow::onFileCompleted(std::u8string_view file, Digest const& checksum
         ++m_stats.bad;
         break;
     }
-    ListView_SetItemCount(m_hListView, m_listEntries.size());
     ListView_EnsureVisible(m_hListView, m_listEntries.size() - 1, FALSE);
     UpdateStats();
 }
@@ -1393,14 +1475,22 @@ void MainWindow::onCheckCompleted(Result r) {
     addListEntry(formatString(30, TEXT("%d files checked"), m_stats.completed));
     if ((m_stats.missing == 0) && (m_stats.bad == 0)) {
         addListEntry(u"All files OK", {}, ListViewEntry::Status::Ok);
-    } 
-    if (m_stats.missing > 0) {
-        addListEntry(formatString(30, TEXT("%d file%s missing"), m_stats.missing, ((m_stats.missing == 1) ? TEXT("") : TEXT("s"))), {}, ListViewEntry::Status::FailedMissing);
+    } else {
+        std::u16string msg;
+        if (m_stats.bad > 0) {
+            msg = assumeUtf16((m_stats.bad > 1) ? TEXT("There were ") : TEXT("There was "));
+        } else {
+            msg = assumeUtf16((m_stats.missing > 1) ? TEXT("There were ") : TEXT("There was "));
+        }
+        if (m_stats.bad > 0) {
+            msg += formatString(40, TEXT("%d bad file%s"), m_stats.bad, ((m_stats.bad == 1) ? TEXT("") : TEXT("s")));
+            if (m_stats.missing > 0) { msg += assumeUtf16(TEXT(" and ")); }
+        }
+        if (m_stats.missing > 0) {
+            msg += formatString(40, TEXT("%d missing file%s"), m_stats.missing, ((m_stats.missing == 1) ? TEXT("") : TEXT("s")));
+        }
+        addListEntry(msg, {}, ListViewEntry::FailedMissing);
     }
-    if (m_stats.bad > 0) {
-        addListEntry(formatString(30, TEXT("%d file%s failed"), m_stats.bad, ((m_stats.bad == 1) ? TEXT("") : TEXT("s"))), {}, ListViewEntry::Status::FailedMismatch);
-    }
-    ListView_SetItemCount(m_hListView, m_listEntries.size());
     ListView_EnsureVisible(m_hListView, m_listEntries.size() - 1, FALSE);
     UpdateStats();
 }
@@ -1414,7 +1504,6 @@ void MainWindow::onCanceled() {
 void MainWindow::onError(quicker_sfv::Error error, std::u8string_view msg) {
     UNREFERENCED_PARAMETER(error);
     addListEntry(u"ERROR: " + convertToUtf16(msg));
-    ListView_SetItemCount(m_hListView, m_listEntries.size());
 }
 
 void MainWindow::UpdateStats() {
@@ -1481,6 +1570,11 @@ int APIENTRY WinMain(HINSTANCE hInstance,
         return 0;
     }
 
+    HACCEL hAccelerators = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDR_ACCELERATOR1));
+    if (!hAccelerators) {
+        return 0;
+    }
+
     scheduler.start();
 
     for (auto const& f : command_line_opts.filesToCheck) {
@@ -1508,8 +1602,11 @@ int APIENTRY WinMain(HINSTANCE hInstance,
             MessageBox(nullptr, TEXT("Error in GetMessage"), window_title, MB_ICONERROR);
             return 0;
         } else {
-            TranslateMessage(&message);
-            DispatchMessage(&message);
+            if (!TranslateAccelerator(main_window.getHwnd(), hAccelerators, &message))
+            {
+                TranslateMessage(&message);
+                DispatchMessage(&message);
+            }
         }
     }
     scheduler.shutdown();
