@@ -59,7 +59,7 @@ private:
 
     std::unique_ptr<Concept> m_digest;
 public:
-    template<IsDigest T> requires( !std::is_same_v<std::remove_cvref_t<T>, Digest> )
+    template<typename T> requires( !std::is_same_v<std::remove_cvref_t<T>, Digest> ) && IsDigest<T>
     Digest(T&& digest)
         :m_digest(std::make_unique<Model<std::remove_cvref_t<T>>>(std::forward<T>(digest)))
     {}
@@ -80,7 +80,6 @@ public:
 };
 
 static_assert(std::regular<Digest>, "Digest is not regular");
-
 
 }
 #endif
