@@ -25,3 +25,7 @@ set_source_files_properties(
     PROPERTIES COMPILE_OPTIONS
     "$<$<CXX_COMPILER_ID:GNU,Clang>:-msse4.2;-mpclmul;-mavx512f;-mvpclmulqdq>"
 )
+target_compile_options(chromium-zlib PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -pedantic>
+)

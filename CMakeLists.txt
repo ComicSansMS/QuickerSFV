@@ -22,11 +22,6 @@ project(QuickerSFV
 
 find_package(OpenSSL REQUIRED)
 
-add_compile_options()
-add_compile_options()
-add_compile_options($<$<CXX_COMPILER_ID:GNU>:-pedantic>)
-add_compile_options($<$<CXX_COMPILER_ID:GNU>:-Wextra>)
-
 add_subdirectory(external/chromium_zlib)
 
 add_library(quicker_sfv STATIC)
@@ -163,7 +158,7 @@ if(MSVC)
     target_link_libraries(QuickerSFV PRIVATE UxTheme.lib Comctl32.lib quicker_sfv)
     target_link_options(QuickerSFV PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/MANIFEST:NO>)
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT QuickerSFV)
-    
+
     if(BUILD_TESTS)
         add_executable(quicker_sfv_ui_tests)
         target_sources(quicker_sfv_ui_tests
@@ -174,6 +169,10 @@ if(MSVC)
             ${PROJECT_SOURCE_DIR}/client_gui/ui/command_line_parser.hpp
             PRIVATE
             ${PROJECT_SOURCE_DIR}/test/ui/win32_command_line_parser.t.cpp
+        )
+        target_compile_options(quicker_sfv_ui_tests PRIVATE
+            $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
+            $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -pedantic>
         )
         target_link_libraries(quicker_sfv_ui_tests PRIVATE quicker_sfv Catch)
         add_test(NAME "QuickerSFV UI Unit Tests" COMMAND quicker_sfv_ui_tests)
