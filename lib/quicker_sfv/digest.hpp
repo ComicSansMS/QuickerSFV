@@ -52,7 +52,7 @@ private:
             return m_ == (mrhs->m_);
         }
 
-        std::type_info const& getType() const {
+        std::type_info const& getType() const override {
             return typeid(T);
         }
     };
