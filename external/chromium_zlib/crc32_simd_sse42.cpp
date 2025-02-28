@@ -16,6 +16,9 @@
 #include <emmintrin.h>
 #include <smmintrin.h>
 #include <wmmintrin.h>
+#ifndef _MSC_VER
+#include <x86intrin.h>
+#endif
 
 namespace quicker_sfv::crc::detail {
 
@@ -28,10 +31,10 @@ uint32_t crc32_sse42_simd_(  /* SSE4.2+PCLMUL */
      * Definitions of the bit-reflected domain constants k1,k2,k3, etc and
      * the CRC32+Barrett polynomials given at the end of the paper.
      */
-    static const uint64_t alignas(16) k1k2[] = { 0x0154442bd4, 0x01c6e41596 };
-    static const uint64_t alignas(16) k3k4[] = { 0x01751997d0, 0x00ccaa009e };
-    static const uint64_t alignas(16) k5k0[] = { 0x0163cd6124, 0x0000000000 };
-    static const uint64_t alignas(16) poly[] = { 0x01db710641, 0x01f7011641 };
+    alignas(16) static const uint64_t k1k2[] = { 0x0154442bd4, 0x01c6e41596 };
+    alignas(16) static const uint64_t k3k4[] = { 0x01751997d0, 0x00ccaa009e };
+    alignas(16) static const uint64_t k5k0[] = { 0x0163cd6124, 0x0000000000 };
+    alignas(16) static const uint64_t poly[] = { 0x01db710641, 0x01f7011641 };
 
     __m128i x0, x1, x2, x3, x4, x5, x6, x7, x8, y5, y6, y7, y8;
 

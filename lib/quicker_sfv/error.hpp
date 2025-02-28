@@ -13,6 +13,8 @@ enum class Error {
     InvalidArgument,
 };
 
+[[noreturn]] void throwException(Error e);
+
 class Exception {
 private:
     Error m_error;
@@ -23,10 +25,9 @@ public:
 
     [[nodiscard]] Error code() const noexcept;
 
-    [[noreturn]] friend void throwException(Error e);
+    friend void throwException(Error e);
 };
 
-[[noreturn]] void throwException(Error e);
 
 }
 #endif

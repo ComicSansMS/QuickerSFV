@@ -15,3 +15,13 @@ target_sources(chromium-zlib
     ${PROJECT_SOURCE_DIR}/fast_crc32.hpp
 )
 target_compile_features(chromium-zlib PRIVATE cxx_std_20)
+set_source_files_properties(
+    ${PROJECT_SOURCE_DIR}/crc32_simd_sse42.cpp
+    PROPERTIES COMPILE_OPTIONS
+    "$<$<CXX_COMPILER_ID:GNU,Clang>:-msse4.2;-mpclmul>"
+)
+set_source_files_properties(
+    ${PROJECT_SOURCE_DIR}/crc32_simd_avx512.cpp
+    PROPERTIES COMPILE_OPTIONS
+    "$<$<CXX_COMPILER_ID:GNU,Clang>:-msse4.2;-mpclmul;-mavx512f;-mvpclmulqdq>"
+)

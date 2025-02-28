@@ -40,10 +40,10 @@ public:
     ChecksumProvider& operator=(ChecksumProvider&&) = delete;
 
     virtual ~ChecksumProvider() = 0;
-    virtual [[nodiscard]] std::u8string_view fileExtensions() const = 0;
-    virtual [[nodiscard]] std::u8string_view fileDescription() const = 0;
-    virtual [[nodiscard]] HasherPtr createHasher(HasherOptions const& hasher_options) const = 0;
-    virtual [[nodiscard]] Digest digestFromString(std::u8string_view str) const = 0;
+    [[nodiscard]] virtual std::u8string_view fileExtensions() const = 0;
+    [[nodiscard]] virtual std::u8string_view fileDescription() const = 0;
+    [[nodiscard]] virtual HasherPtr createHasher(HasherOptions const& hasher_options) const = 0;
+    [[nodiscard]] virtual Digest digestFromString(std::u8string_view str) const = 0;
 
     virtual ChecksumFile readFromFile(FileInput& file_input) const = 0;
     virtual void serialize(FileOutput& file_output, ChecksumFile const& f) const = 0;

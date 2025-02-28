@@ -19,7 +19,6 @@ struct CrcDigest {
     std::u8string toString() const;
 
     friend bool operator==(CrcDigest const&, CrcDigest const&) = default;
-    friend bool operator!=(CrcDigest const&, CrcDigest const&) = default;
 };
 
 static_assert(IsDigest<CrcDigest>, "CrcDigest is not a digest");

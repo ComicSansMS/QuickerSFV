@@ -11,7 +11,10 @@
 #ifdef _MSC_VER
 #define SUPPRESS_DEPRECATED_WARNING() _Pragma("warning(suppress : 4996)") void()
 #else
-#define SUPPRESS_DEPRECATED_WARNING 
+#define SUPPRESS_DEPRECATED_WARNING() void()
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
 #endif
 
 namespace quicker_sfv {
@@ -26,7 +29,6 @@ struct MD5Digest {
     std::u8string toString() const;
 
     friend bool operator==(MD5Digest const&, MD5Digest const&) = default;
-    friend bool operator!=(MD5Digest const&, MD5Digest const&) = default;
 };
 
 static_assert(IsDigest<MD5Digest>, "MD5Digest is not a digest");

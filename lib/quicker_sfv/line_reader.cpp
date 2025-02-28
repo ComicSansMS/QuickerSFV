@@ -3,6 +3,8 @@
 #include <quicker_sfv/error.hpp>
 #include <quicker_sfv/utf.hpp>
 
+#include <algorithm>
+
 namespace quicker_sfv {
 
 inline constexpr size_t const READ_BUFFER_SIZE = 64 << 10;
@@ -59,8 +61,8 @@ std::optional<std::u8string> LineReader::read_line() {
         std::span<std::byte> front_range(it_begin, end(m_buffers.front));
         std::span<std::byte> back_range(begin(m_buffers.back), it);
         std::vector<std::byte> buffer;
-        buffer.append_range(front_range);
-        buffer.append_range(back_range);
+        buffer.insert(end(buffer), begin(front_range), end(front_range));
+        buffer.insert(end(buffer), begin(back_range), end(back_range));
         if (!quicker_sfv::checkValidUtf8(buffer)) {
             throwException(Error::ParserError);
         }
