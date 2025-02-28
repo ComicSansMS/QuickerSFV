@@ -794,6 +794,7 @@ private:
         uint32_t missing;
         uint32_t bandwidth;
     } m_stats;
+
     struct ListViewEntry {
         std::u16string name;
         std::u16string checksum;
@@ -803,8 +804,17 @@ private:
             FailedMissing,
             Information
         } status;
+        uint32_t original_position;
     };
     std::vector<ListViewEntry> m_listEntries;
+    struct ListViewSort {
+        int sort_column;
+        enum class Order {
+            Original,
+            Ascending,
+            Descending,
+        } order;
+    } m_listSort;
 
     HasherOptions m_options;
     FileProviders* m_fileProviders;
@@ -843,12 +853,14 @@ private:
     void UpdateStats();
 
     void resize();
+
+    void addListEntry(std::u16string name, std::u16string checksum = u"", ListViewEntry::Status status = ListViewEntry::Status::Information);
 };
 
 MainWindow::MainWindow(FileProviders& file_providers, Scheduler& scheduler)
     :m_hInstance(nullptr), m_windowTitle(nullptr), m_hWnd(nullptr), m_hTextFieldLeft(nullptr), m_hTextFieldRight(nullptr),
      m_hListView(nullptr), m_imageList(nullptr),
-     m_stats{ },
+     m_stats{ }, m_listSort{ .sort_column = 0, .order = ListViewSort::Order::Original },
      m_options{ .has_sse42 = true, .has_avx512 = false}, m_fileProviders(&file_providers), m_scheduler(&scheduler)
 {
 }
@@ -1091,6 +1103,38 @@ LRESULT MainWindow::populateListView(NMHDR* nmh) {
         // not handled - all items always in memory
     } else if (nmh->code == LVN_ODFINDITEM) {
         // not handled - no finding in results list for now
+    } else if (nmh->code == LVN_COLUMNCLICK) {
+        NMLISTVIEW* nmlv = std::bit_cast<NMLISTVIEW*>(nmh);
+        int const column_index = nmlv->iSubItem;
+        if (column_index != m_listSort.sort_column) {
+            m_listSort.sort_column = column_index;
+            m_listSort.order = ListViewSort::Order::Ascending;
+        } else {
+            m_listSort.order = static_cast<ListViewSort::Order>((static_cast<int>(m_listSort.order) + 1) % 3);
+        }
+        std::stable_sort(begin(m_listEntries), end(m_listEntries),
+            [sort = m_listSort](auto const& lhs, auto const& rhs) {
+                if (sort.order == ListViewSort::Order::Original) {
+                    return lhs.original_position < rhs.original_position;
+                } else if (sort.order == ListViewSort::Order::Ascending) {
+                    if (sort.sort_column == 0) {
+                        return lstrcmpi(toWcharStr(lhs.name), toWcharStr(rhs.name)) < 0;
+                    } else if (sort.sort_column == 1) {
+                        return lhs.checksum < rhs.checksum;
+                    } else {
+                        return lhs.status < rhs.status;
+                    }
+                } else {
+                    if (sort.sort_column == 0) {
+                        return lstrcmpi(toWcharStr(lhs.name), toWcharStr(rhs.name)) > 0;
+                    } else if (sort.sort_column == 1) {
+                        return lhs.checksum > rhs.checksum;
+                    } else {
+                        return lhs.status > rhs.status;
+                    }
+                }
+            });
+        ListView_RedrawItems(m_hListView, 0, m_listEntries.size());
     }
     return 0;
 }
@@ -1282,6 +1326,16 @@ void MainWindow::resize() {
     MoveWindow(m_hListView, 0, textFieldHeight, new_width, rect.bottom - textFieldHeight, TRUE);
 }
 
+void MainWindow::addListEntry(std::u16string name, std::u16string checksum, ListViewEntry::Status status) {
+    m_listEntries.push_back(ListViewEntry{
+        .name = std::move(name),
+        .checksum = std::move(checksum),
+        .status = status,
+        .original_position = static_cast<uint32_t>(m_listEntries.size())
+    });
+    ListView_SetItemCount(m_hListView, m_listEntries.size());
+}
+
 HWND MainWindow::getHwnd() const {
     return m_hWnd;
 }
@@ -1294,10 +1348,9 @@ void MainWindow::onCheckStarted(uint32_t n_files) {
     ListView_DeleteAllItems(m_hListView);
     m_listEntries.clear();
     quicker_sfv::Version const v = quicker_sfv::getVersion();
-    m_listEntries.push_back(ListViewEntry{ .name = formatString(50, TEXT("QuickerSfv v%d.%d.%d"), v.major, v.minor, v.patch), .checksum = {}, .status = ListViewEntry::Status::Information });
+    addListEntry(formatString(50, TEXT("QuickerSfv v%d.%d.%d"), v.major, v.minor, v.patch));
     m_stats = Stats{ .total = n_files };
     UpdateStats();
-    ListView_SetItemCount(m_hListView, 1);
 }
 
 void MainWindow::onProgress(std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s) {
@@ -1313,15 +1366,15 @@ void MainWindow::onFileCompleted(std::u8string_view file, Digest const& checksum
     m_stats.bandwidth = 0;
     switch (status) {
     case CompletionStatus::Ok:
-        m_listEntries.push_back(ListViewEntry{ .name = convertToUtf16(file), .checksum = convertToUtf16(checksum.toString()), .status = ListViewEntry::Status::Ok});
+        addListEntry(convertToUtf16(file), convertToUtf16(checksum.toString()), ListViewEntry::Status::Ok);
         ++m_stats.ok;
         break;
     case CompletionStatus::Missing:
-        m_listEntries.push_back(ListViewEntry{ .name = convertToUtf16(file), .checksum = {}, .status = ListViewEntry::Status::FailedMissing });
+        addListEntry(convertToUtf16(file), {}, ListViewEntry::Status::FailedMissing);
         ++m_stats.missing;
         break;
     case CompletionStatus::Bad:
-        m_listEntries.push_back(ListViewEntry{ .name = convertToUtf16(file), .checksum = convertToUtf16(checksum.toString()), .status = ListViewEntry::Status::FailedMismatch});
+        addListEntry(convertToUtf16(file), convertToUtf16(checksum.toString()), ListViewEntry::Status::FailedMismatch);
         ++m_stats.bad;
         break;
     }
@@ -1337,23 +1390,15 @@ void MainWindow::onCheckCompleted(Result r) {
     m_stats.completed = r.ok + r.bad + r.missing;
     m_stats.progress = 0;
     m_stats.bandwidth = 0;
-    m_listEntries.push_back(ListViewEntry{ .name = formatString(30, TEXT("%d files checked"), m_stats.completed), .checksum = {}, .status = ListViewEntry::Status::Information});
+    addListEntry(formatString(30, TEXT("%d files checked"), m_stats.completed));
     if ((m_stats.missing == 0) && (m_stats.bad == 0)) {
-        m_listEntries.push_back(ListViewEntry{ .name = u"All files OK", .checksum = {}, .status = ListViewEntry::Status::Ok });
+        addListEntry(u"All files OK", {}, ListViewEntry::Status::Ok);
     } 
     if (m_stats.missing > 0) {
-        m_listEntries.push_back(ListViewEntry{
-            .name = formatString(30, TEXT("%d file%s missing"), m_stats.missing, ((m_stats.missing == 1) ? TEXT("") : TEXT("s"))),
-            .checksum = {},
-            .status = ListViewEntry::Status::FailedMissing
-        });
+        addListEntry(formatString(30, TEXT("%d file%s missing"), m_stats.missing, ((m_stats.missing == 1) ? TEXT("") : TEXT("s"))), {}, ListViewEntry::Status::FailedMissing);
     }
     if (m_stats.bad > 0) {
-        m_listEntries.push_back(ListViewEntry{
-            .name = formatString(30, TEXT("%d file%s failed"), m_stats.bad, ((m_stats.bad == 1) ? TEXT("") : TEXT("s"))),
-            .checksum = {},
-            .status = ListViewEntry::Status::FailedMismatch
-        });
+        addListEntry(formatString(30, TEXT("%d file%s failed"), m_stats.bad, ((m_stats.bad == 1) ? TEXT("") : TEXT("s"))), {}, ListViewEntry::Status::FailedMismatch);
     }
     ListView_SetItemCount(m_hListView, m_listEntries.size());
     ListView_EnsureVisible(m_hListView, m_listEntries.size() - 1, FALSE);
@@ -1368,7 +1413,7 @@ void MainWindow::onCanceled() {
 
 void MainWindow::onError(quicker_sfv::Error error, std::u8string_view msg) {
     UNREFERENCED_PARAMETER(error);
-    m_listEntries.push_back(ListViewEntry{ .name = u"ERROR: " + convertToUtf16(msg), .checksum = {}, .status = ListViewEntry::Status::Information });
+    addListEntry(u"ERROR: " + convertToUtf16(msg));
     ListView_SetItemCount(m_hListView, m_listEntries.size());
 }
 
