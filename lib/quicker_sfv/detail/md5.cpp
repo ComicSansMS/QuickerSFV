@@ -9,12 +9,12 @@
 #include <stdexcept>
 
 #ifdef _MSC_VER
-#define SUPPRESS_DEPRECATED_WARNING() _Pragma("warning(suppress : 4996)") void()
+#   define SUPPRESS_DEPRECATED_WARNING() _Pragma("warning(suppress : 4996)") void()
 #else
-#define SUPPRESS_DEPRECATED_WARNING() void()
-#ifdef __clang__
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#endif
+#   define SUPPRESS_DEPRECATED_WARNING() void()
+#   ifdef __clang__
+#       pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#   endif
 #endif
 
 namespace quicker_sfv {

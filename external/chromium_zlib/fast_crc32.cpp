@@ -1,6 +1,10 @@
 #include <fast_crc32.hpp>
 
-#include <intrin.h>
+#ifdef _MSC_VER
+#   include <intrin.h>
+#else
+#   include <cpuid.h>
+#endif
 
 #include <array>
 
@@ -70,6 +74,24 @@ static_assert(
                             " tempor incididunt ut labore et dolore magna aliqua.") == 1196127599)
     , "crc32_reference() is broken");
 
+void check_cpuid(int function_id, int32_t (&data)[4]) {
+#ifdef _MSC_VER
+    __cpuidex(data, 0, 0);
+    if (data[0] < function_id) { data[0] = 0; data[1] = 0; data[2] = 0; data[3] = 0; return; }
+    __cpuidex(data, function_id, 0);
+#else
+    uint32_t max_level, t2, t3, t4;
+    __get_cpuid(0, &max_level, &t2, &t3, &t4);
+    if (max_level < function_id) { data[0] = 0; data[1] = 0; data[2] = 0; data[3] = 0; return; }
+    __get_cpuid(function_id,
+            reinterpret_cast<uint32_t*>(data[0]),
+            reinterpret_cast<uint32_t*>(data[1]),
+            reinterpret_cast<uint32_t*>(data[2]),
+            reinterpret_cast<uint32_t*>(data[3])
+        );
+#endif
+}
+
 } // anonymous namespace
 
 namespace quicker_sfv::crc {
@@ -83,7 +105,7 @@ uint32_t crc32_avx512_simd_(unsigned char const* buf, size_t len, uint32_t crc);
  * @pre buffer length must be at least 64, and a multiple of 16.
  */
 uint32_t crc32_sse42_simd_(unsigned char const* buf, size_t len, uint32_t crc);
-}
+} // namespace detail
 
 uint32_t crc32(char const* buffer, size_t buffer_size, uint32_t crc_start, bool use_avx512) {
     size_t remain = buffer_size;
@@ -109,7 +131,7 @@ uint32_t crc32(char const* buffer, size_t buffer_size, uint32_t crc_start, bool 
 
 bool supportsSse42() {
     int32_t data[4];
-    __cpuidex(data, 1, 0);
+    check_cpuid(1, data);
     bool const sse42 = (data[2] & 0x0010'0000) != 0;
     bool const pclmulqdq = (data[2] & 0x0000'0002) != 0;
     return sse42 && pclmulqdq;
@@ -117,13 +139,13 @@ bool supportsSse42() {
 
 bool supportsAvx512() {
     int32_t data[4];
-    __cpuidex(data, 1, 0);
+    check_cpuid(1, data);
     bool const avx = (data[2] & 0x1000'0000) != 0;
     bool const pclmulqdq = (data[2] & 0x0000'0002) != 0;
     if (!(avx && pclmulqdq)) {
         return false;
     }
-    __cpuidex(data, 7, 0);
+    check_cpuid(7, data);
     bool const avx512f = (data[1] & 0x0001'0000) != 0;
     bool const vpclmulqdq = (data[2] & 0x0000'0400) != 0;
     return avx512f && vpclmulqdq;
