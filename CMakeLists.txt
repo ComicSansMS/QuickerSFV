@@ -124,7 +124,7 @@ if(MSVC)
     )
     target_sources(QuickerSFV
         PRIVATE
-        ${PROJECT_SOURCE_DIR}/QuickerSFV.cpp
+        ${PROJECT_SOURCE_DIR}/client_gui/QuickerSFV.cpp
         ${PROJECT_SOURCE_DIR}/client_gui/ui/enforce.cpp
         ${PROJECT_SOURCE_DIR}/client_gui/ui/file_dialog.cpp
         PRIVATE
