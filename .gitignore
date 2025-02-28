@@ -39,3 +39,4 @@ build/*
 build32/*
 .vs/*
 out/*
+.vscode/*

@@ -12,8 +12,10 @@
 #   define SUPPRESS_DEPRECATED_WARNING() _Pragma("warning(suppress : 4996)") void()
 #else
 #   define SUPPRESS_DEPRECATED_WARNING() void()
-#   ifdef __clang__
+#   if defined(__clang__)
 #       pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#   elif defined(__GNUC__)
+#       pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #   endif
 #endif
 
