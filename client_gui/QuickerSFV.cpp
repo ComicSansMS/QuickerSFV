@@ -902,7 +902,9 @@ private:
             Ok,
             FailedMismatch,
             FailedMissing,
-            Information
+            Information,
+            MessageOk,
+            MessageBad,
         } status;
         uint32_t original_position;
     };
@@ -1181,6 +1183,12 @@ LRESULT MainWindow::populateListView(NMHDR* nmh) {
                     disp_info->item.iImage = 1;
                     break;
                 case ListViewEntry::Status::FailedMissing:
+                    disp_info->item.iImage = 1;
+                    break;
+                case ListViewEntry::Status::MessageOk:
+                    disp_info->item.iImage = 0;
+                    break;
+                case ListViewEntry::Status::MessageBad:
                     disp_info->item.iImage = 1;
                     break;
                 case ListViewEntry::Status::Information: [[fallthrough]];
@@ -1543,7 +1551,7 @@ void MainWindow::onCheckCompleted(Result r) {
     m_stats.bandwidth = 0;
     addListEntry(formatString(30, TEXT("%d files checked"), m_stats.completed));
     if ((m_stats.missing == 0) && (m_stats.bad == 0)) {
-        addListEntry(u"All files OK", {}, ListViewEntry::Status::Ok);
+        addListEntry(u"All files OK", {}, ListViewEntry::Status::MessageOk);
     } else {
         std::u16string msg;
         if (m_stats.bad > 0) {
@@ -1558,7 +1566,7 @@ void MainWindow::onCheckCompleted(Result r) {
         if (m_stats.missing > 0) {
             msg += formatString(40, TEXT("%d missing file%s"), m_stats.missing, ((m_stats.missing == 1) ? TEXT("") : TEXT("s")));
         }
-        addListEntry(msg, {}, ListViewEntry::FailedMissing);
+        addListEntry(msg, {}, ListViewEntry::MessageBad);
     }
     ListView_EnsureVisible(m_hListView, m_listEntries.size() - 1, FALSE);
     UpdateStats();

@@ -4,13 +4,13 @@ project(openssl-crypto)
 
 find_program(NASM_EXECUTABLE NAMES nasm DOC "NASM (Netwide Assembler) executable")
 
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(BUILD_64_BIT ON)
-elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
-    set(BUILD_64_BIT OFF)
-endif()
-
 if(NASM_EXECUTABLE)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(BUILD_64_BIT ON)
+    elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
+        set(BUILD_64_BIT OFF)
+    endif()
+
     if(BUILD_64_BIT)
         add_custom_command(
             OUTPUT ${PROJECT_BINARY_DIR}/generated/md5_asm.obj
