@@ -125,6 +125,20 @@ BEGIN
     END
 END
 
+IDR_MENU_POPUP MENU
+BEGIN
+    POPUP "Context Menu"
+    BEGIN
+        MENUITEM "Mark bad files",              ID_CONTEXTMENU_MARKBADFILES
+        MENUITEM "Copy",                        ID_CONTEXTMENU_COPY
+        MENUITEM "Clear All DB Info",           ID_CONTEXTMENU_CLEARALLDBINFO, INACTIVE
+        MENUITEM "Delete marked files",         ID_CONTEXTMENU_DELETEMARKEDFILES
+        MENUITEM "Check all files",             ID_CONTEXTMENU_CHECKALLFILES
+        MENUITEM "Reparent current checksum file", ID_CONTEXTMENU_REPARENTCURRENTCHECKSUMFILE
+        MENUITEM "Move all files to child directory", ID_CONTEXTMENU_MOVEALLFILESTOCHILDDIRECTORY
+    END
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //

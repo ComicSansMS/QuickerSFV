@@ -127,6 +127,7 @@ private:
         } kind;
         ChecksumFile checksum_file;
         std::u16string checksum_path;
+        std::u16string folder_path;
         HasherPtr hasher;
     };
     std::vector<OperationState> m_opsQueue;
@@ -181,6 +182,7 @@ public:
 private:
     void worker();
     void doVerify(OperationState& op);
+    void doCreate(OperationState& op);
 
     void signalCheckStarted(EventHandler* recipient, uint32_t n_files);
     void signalProgress(EventHandler* recipient, std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s);
@@ -259,7 +261,18 @@ void Scheduler::post(CancelOperation) {
 }
 
 void Scheduler::post(CreateFromFolderOperation op) {
-    // @todo
+    std::scoped_lock lk(m_mtxOps);
+    m_opsQueue.push_back(OperationState{
+        .cancel_requested = false,
+        .event_handler = op.event_handler,
+        .checksum_provider = op.provider,
+        .kind = OperationState::Op::Create,
+        .checksum_file = ChecksumFile{},
+        .checksum_path = op.target_file,
+        .folder_path = op.folder_path,
+        .hasher = op.provider->createHasher(op.options)
+    });
+    m_cvOps.notify_one();
 }
 
 void Scheduler::worker() {
@@ -277,6 +290,9 @@ void Scheduler::worker() {
                 switch (op.kind) {
                 case OperationState::Op::Verify:
                     doVerify(op);
+                    break;
+                case OperationState::Op::Create:
+                    doCreate(op);
                     break;
                 }
             } catch (Exception& e) {
@@ -607,6 +623,89 @@ void Scheduler::doVerify(OperationState& op) {
     signalCheckCompleted(op.event_handler, result);
 }
 
+namespace {
+struct FileInfo {
+    LPCWSTR absolute_path;
+    std::u16string_view relative_path;
+    uint64_t size;
+};
+
+std::generator<FileInfo> iterateFiles(std::u16string const& base_path) {
+    auto const is_dot = [](LPCWSTR p) -> bool { return p[0] == L'.' && p[1] == L'\0'; };
+    auto const is_dotdot = [](LPCWSTR p) -> bool { return p[0] == L'.' && p[1] == L'.' && p[2] == L'\0'; };
+    auto const appendWildcard = [](std::u16string& str) {
+        if (!str.empty() && str.back() == u'*') { str.pop_back(); }
+        if (!str.empty() && str.back() == u'\\') { str.pop_back(); }
+        str.append(u"\\*");
+        };
+    auto const relativePathTo = [](std::u16string_view p, std::u16string_view parent_path) -> std::u16string {
+        std::u16string ret{ p };
+        auto it = std::mismatch(ret.begin(), ret.end(), parent_path.begin(), parent_path.end());
+        if (it.first != ret.end() && (*(it.first) == u'\\')) { ++it.first; }
+        ret.erase(ret.begin(), it.first);
+        return ret;
+        };
+    std::vector<std::u16string> directories;
+    directories.emplace_back(base_path);
+    appendWildcard(directories.back());
+    while (!directories.empty()) {
+        WIN32_FIND_DATA find_data;
+        std::u16string const current_path = std::move(directories.back());
+        directories.pop_back();
+        HANDLE hsearch = FindFirstFileEx(toWcharStr(current_path), FindExInfoBasic, &find_data,
+            FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
+        if (hsearch == INVALID_HANDLE_VALUE) {
+            MessageBox(nullptr, TEXT("Unable to open file for finding"), TEXT("Error"), MB_ICONERROR);
+        }
+        do {
+            if (is_dot(find_data.cFileName) || is_dotdot(find_data.cFileName)) { continue; }
+            std::u16string p = current_path;
+            p.pop_back();   // pop wildcard
+            p.append(assumeUtf16(find_data.cFileName));
+            uint64_t filesize = (static_cast<uint64_t>(find_data.nFileSizeHigh) << 32ull) | static_cast<uint64_t>(find_data.nFileSizeLow);
+            if ((find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+                appendWildcard(p);
+                directories.emplace_back(std::move(p));
+            } else {
+                co_yield FileInfo{ .absolute_path = toWcharStr(p), .relative_path = relativePathTo(p, base_path), .size = filesize };
+            }
+        } while (FindNextFile(hsearch, &find_data) != FALSE);
+        bool success = (GetLastError() == ERROR_NO_MORE_FILES);
+        FindClose(hsearch);
+    }
+}
+
+Digest hashFile(Hasher& hasher, LPCWSTR filepath, uint64_t filesize) {
+    hasher.reset();
+    HANDLE hin = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+    if (hin == INVALID_HANDLE_VALUE) {
+        std::abort();
+    }
+    HANDLE hmappedFile = CreateFileMapping(hin, nullptr, PAGE_READONLY, 0, 0, nullptr);
+    if (!hmappedFile) {
+        std::abort();
+    }
+    LPVOID fptr = MapViewOfFile(hmappedFile, FILE_MAP_READ, 0, 0, 0);
+    if (!fptr) {
+        std::abort();
+    }
+    std::span<char const> filespan{ reinterpret_cast<char const*>(fptr), (size_t)filesize };
+    hasher.addData(filespan);
+    UnmapViewOfFile(fptr);
+    CloseHandle(hmappedFile);
+    CloseHandle(hin);
+    return hasher.finalize();
+}
+} // anonymous namespace
+
+void Scheduler::doCreate(OperationState& op) {
+    for (auto const& [abs, rel, size] : iterateFiles(op.folder_path)) {
+        op.checksum_file.addEntry(convertToUtf8(rel), hashFile(*op.hasher, abs, size));
+    }
+    FileOutputWin32 writer(op.checksum_path);
+    op.checksum_provider->serialize(writer, op.checksum_file);
+}
+
 void Scheduler::signalCheckStarted(EventHandler* recipient, uint32_t n_files) {
     std::scoped_lock lk(m_mtxEvents);
     m_eventsQueue.emplace_back(Event {
@@ -784,6 +883,7 @@ private:
     HWND m_hTextFieldRight;
     HWND m_hListView;
     HIMAGELIST m_imageList;
+    HMENU m_hPopupMenu;
 
     struct Stats {
         uint32_t total;
@@ -855,17 +955,24 @@ private:
     void resize();
 
     void addListEntry(std::u16string name, std::u16string checksum = u"", ListViewEntry::Status status = ListViewEntry::Status::Information);
+
+    void doCopySelectionToClipboard();
+    void doMarkBadFiles();
 };
 
 MainWindow::MainWindow(FileProviders& file_providers, Scheduler& scheduler)
     :m_hInstance(nullptr), m_windowTitle(nullptr), m_hWnd(nullptr), m_hTextFieldLeft(nullptr), m_hTextFieldRight(nullptr),
-     m_hListView(nullptr), m_imageList(nullptr),
-     m_stats{ }, m_listSort{ .sort_column = 0, .order = ListViewSort::Order::Original },
+     m_hListView(nullptr), m_imageList(nullptr), m_hPopupMenu(nullptr),
+     m_stats{}, m_listSort{ .sort_column = 0, .order = ListViewSort::Order::Original },
      m_options{ .has_sse42 = true, .has_avx512 = false}, m_fileProviders(&file_providers), m_scheduler(&scheduler)
 {
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow() {
+    if (m_hPopupMenu) {
+        DestroyMenu(m_hPopupMenu);
+    }
+}
 
 struct FileSpec {
     std::vector<COMDLG_FILTERSPEC> fileTypes;
@@ -908,78 +1015,6 @@ std::optional<gui::FileDialogResult> OpenFile(HWND parent_window, FileProviders 
 
 std::optional<gui::FileDialogResult> SaveFile(HWND parent_window, FileProviders const& file_providers) {
     return gui::FileDialog(parent_window, gui::FileDialogAction::SaveAs, nullptr, determineFileTypes(file_providers, false).fileTypes);
-}
-
-struct FileInfo {
-    LPCWSTR absolute_path;
-    std::u16string_view relative_path;
-    uint64_t size;
-};
-
-std::generator<FileInfo> iterateFiles(std::u16string const& base_path) {
-    auto const is_dot = [](LPCWSTR p) -> bool { return p[0] == L'.' && p[1] == L'\0'; };
-    auto const is_dotdot = [](LPCWSTR p) -> bool { return p[0] == L'.' && p[1] == L'.' && p[2] == L'\0'; };
-    auto const appendWildcard = [](std::u16string& str) {
-        if (!str.empty() && str.back() == u'*') { str.pop_back(); }
-        if (!str.empty() && str.back() == u'\\') { str.pop_back(); }
-        str.append(u"\\*");
-    };
-    auto const relativePathTo = [](std::u16string_view p, std::u16string_view parent_path) -> std::u16string {
-        std::u16string ret{ p };
-        auto it = std::mismatch(ret.begin(), ret.end(), parent_path.begin(), parent_path.end());
-        if (it.first != ret.end() && (*(it.first) == u'\\')) { ++it.first; }
-        ret.erase(ret.begin(), it.first);
-        return ret;
-    };
-    std::vector<std::u16string> directories;
-    directories.emplace_back(base_path);
-    appendWildcard(directories.back());
-    while (!directories.empty()) {
-        WIN32_FIND_DATA find_data;
-        std::u16string const current_path = std::move(directories.back());
-        directories.pop_back();
-        HANDLE hsearch = FindFirstFileEx(toWcharStr(current_path), FindExInfoBasic, &find_data,
-                                         FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
-        if (hsearch == INVALID_HANDLE_VALUE) {
-            MessageBox(nullptr, TEXT("Unable to open file for finding"), TEXT("Error"), MB_ICONERROR);
-        }
-        do {
-            if (is_dot(find_data.cFileName) || is_dotdot(find_data.cFileName)) { continue; }
-            std::u16string p = current_path;
-            p.pop_back();   // pop wildcard
-            p.append(assumeUtf16(find_data.cFileName));
-            uint64_t filesize = (static_cast<uint64_t>(find_data.nFileSizeHigh) << 32ull) | static_cast<uint64_t>(find_data.nFileSizeLow);
-            if ((find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
-                appendWildcard(p);
-                directories.emplace_back(std::move(p));
-            } else {
-                co_yield FileInfo{ .absolute_path = toWcharStr(p), .relative_path = relativePathTo(p, base_path), .size = filesize };
-            }
-        } while (FindNextFile(hsearch, &find_data) != FALSE);
-        bool success = (GetLastError() == ERROR_NO_MORE_FILES);
-        FindClose(hsearch);
-    }
-}
-
-Digest hashFile(HasherPtr hasher, LPCWSTR filepath, uint64_t filesize) {
-    HANDLE hin = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
-    if (hin == INVALID_HANDLE_VALUE) {
-        std::abort();
-    }
-    HANDLE hmappedFile = CreateFileMapping(hin, nullptr, PAGE_READONLY, 0, 0, nullptr);
-    if (!hmappedFile) {
-        std::abort();
-    }
-    LPVOID fptr = MapViewOfFile(hmappedFile, FILE_MAP_READ, 0, 0, 0);
-    if (!fptr) {
-        std::abort();
-    }
-    std::span<char const> filespan{ reinterpret_cast<char const*>(fptr), (size_t)filesize };
-    hasher->addData(filespan);
-    UnmapViewOfFile(fptr);
-    CloseHandle(hmappedFile);
-    CloseHandle(hin);
-    return hasher->finalize();
 }
 
 namespace {
@@ -1095,40 +1130,13 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     }
                 }
                 return 0;
+            } else if (LOWORD(wParam) == ID_CONTEXTMENU_COPY) {
+                doCopySelectionToClipboard();
+            } else if (LOWORD(wParam) == ID_CONTEXTMENU_MARKBADFILES) {
+                doMarkBadFiles();
             }
         } else if (LOWORD(wParam) == ID_ACCELERATOR_COPY) {
-            std::vector<ListViewEntry const*> selected_items;
-            size_t total_size = 1;
-            for (int i = 0, i_end = static_cast<int>(m_listEntries.size()); i != i_end; ++i) {
-                if (ListView_GetItemState(m_hListView, i, LVIS_SELECTED) == LVIS_SELECTED) {
-                    selected_items.push_back(&m_listEntries[i]);
-                    total_size += m_listEntries[i].name.size() + 2;
-                }
-            }
-            if (selected_items.empty()) { return 0; }
-            HGLOBAL hmem = GlobalAlloc(GHND, total_size * sizeof(TCHAR));
-            if (!hmem) { return 0; }
-            GlobalAllocGuard guard_hmem(hmem);
-            {
-                MemLockGuard mem_lock(hmem);
-                char* mem = mem_lock();
-                if (!mem) { return 0; }
-
-                size_t offset = 0;
-                for (auto const& e : selected_items) {
-                    std::memcpy(mem + offset, e->name.c_str(), e->name.size() * sizeof(TCHAR));
-                    offset += e->name.size() * sizeof(TCHAR);
-                    WCHAR const line_break[] = TEXT("\r\n");
-                    std::memcpy(mem + offset, line_break, 2*sizeof(TCHAR));
-                    offset += 2;
-                }
-            }
-            {
-                ClipboardGuard guard_clipboard(m_hWnd);
-                if (!EmptyClipboard()) { return 0; }
-                if (!SetClipboardData(CF_UNICODETEXT, hmem)) { return 0; }
-                guard_hmem.release();
-            }
+            doCopySelectionToClipboard();
         }
     } else if (msg == WM_NOTIFY) {
         NMHDR* nmh = std::bit_cast<LPNMHDR>(lParam);
@@ -1218,8 +1226,63 @@ LRESULT MainWindow::populateListView(NMHDR* nmh) {
                 }
             });
         ListView_RedrawItems(m_hListView, 0, m_listEntries.size());
+    } else if (nmh->code == NM_RCLICK) {
+        POINT mouse_cursor;
+        if (!GetCursorPos(&mouse_cursor)) { return 0; }
+        if (!TrackPopupMenu(GetSubMenu(m_hPopupMenu, 0), TPM_RIGHTBUTTON,
+                            mouse_cursor.x, mouse_cursor.y, 0, m_hWnd, nullptr)) {
+            return 0;
+        }
     }
     return 0;
+}
+
+void MainWindow::doCopySelectionToClipboard() {
+    std::vector<ListViewEntry const*> selected_items;
+    size_t total_size = 1;
+    for (int i = 0, i_end = static_cast<int>(m_listEntries.size()); i != i_end; ++i) {
+        if (ListView_GetItemState(m_hListView, i, LVIS_SELECTED) == LVIS_SELECTED) {
+            selected_items.push_back(&m_listEntries[i]);
+            total_size += m_listEntries[i].name.size() + 2;
+        }
+    }
+    if (selected_items.empty()) { return; }
+    HGLOBAL hmem = GlobalAlloc(GHND, total_size * sizeof(TCHAR));
+    if (!hmem) { return; }
+    GlobalAllocGuard guard_hmem(hmem);
+    {
+        MemLockGuard mem_lock(hmem);
+        char* mem = mem_lock();
+        if (!mem) { return; }
+
+        size_t offset = 0;
+        for (auto const& e : selected_items) {
+            std::memcpy(mem + offset, e->name.c_str(), e->name.size() * sizeof(TCHAR));
+            offset += e->name.size() * sizeof(TCHAR);
+            WCHAR const line_break[] = TEXT("\r\n");
+            std::memcpy(mem + offset, line_break, 2*sizeof(TCHAR));
+            offset += 2;
+        }
+    }
+    {
+        ClipboardGuard guard_clipboard(m_hWnd);
+        if (!EmptyClipboard()) { return; }
+        if (!SetClipboardData(CF_UNICODETEXT, hmem)) { return; }
+        guard_hmem.release();
+    }
+}
+
+void MainWindow::doMarkBadFiles() {
+    // clear previous selection
+    ListView_SetItemState(m_hListView, -1, 0, LVIS_SELECTED);
+    // mark all bad
+    for (size_t i = 0, i_end = m_listEntries.size(); i != i_end; ++i) {
+        if ((m_listEntries[i].status == ListViewEntry::Status::FailedMismatch) ||
+            (m_listEntries[i].status == ListViewEntry::Status::FailedMissing))
+        {
+            ListView_SetItemState(m_hListView, i, LVIS_SELECTED, LVIS_SELECTED);
+        }
+    }
 }
 
 BOOL MainWindow::createMainWindow(HINSTANCE hInstance, int nCmdShow,
@@ -1395,6 +1458,12 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
         }
     }
     ListView_SetImageList(m_hListView, m_imageList, LVSIL_SMALL);
+
+    m_hPopupMenu = LoadMenu(m_hInstance, MAKEINTRESOURCE(IDR_MENU_POPUP));
+    if (!m_hPopupMenu) {
+        MessageBox(nullptr, TEXT("Error creating popup menu"), m_windowTitle, MB_ICONERROR);
+        return -1;
+    }
 
     return 0;
 }

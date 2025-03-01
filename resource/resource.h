@@ -9,6 +9,7 @@
 #define IDI_ICON_CROSS                  107
 #define IDI_ICON_INFO                   108
 #define IDR_ACCELERATOR1                109
+#define IDR_MENU_POPUP                  110
 #define ID_FILE_EXIT                    40001
 #define ID_HELP_ABOUT                   40002
 #define ID_FILE_OPEN                    40003
@@ -16,19 +17,25 @@
 #define ID_OPTIONS_UPDATEDB             40005
 #define ID_FILE_CREATE                  40006
 #define ID_CREATE_                      40007
-#define ID_CREATE_40008                 40008
 #define ID_CREATE_CRC                   40009
 #define ID_CREATE_MD5                   40010
 #define ID_OPTIONS_USEAVX512            40011
 #define ID_CREATE_FROM_FOLDER           40012
 #define ID_ACCELERATOR_COPY             40013
+#define ID_CONTEXTMENU_MARKBADFILES     40021
+#define ID_CONTEXTMENU_COPY             40022
+#define ID_CONTEXTMENU_CLEARALLDBINFO   40023
+#define ID_CONTEXTMENU_DELETEMARKEDFILES 40024
+#define ID_CONTEXTMENU_CHECKALLFILES    40025
+#define ID_CONTEXTMENU_REPARENTCURRENTCHECKSUMFILE 40026
+#define ID_CONTEXTMENU_MOVEALLFILESTOCHILDDIRECTORY 40027
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        110
-#define _APS_NEXT_COMMAND_VALUE         40015
+#define _APS_NEXT_RESOURCE_VALUE        111
+#define _APS_NEXT_COMMAND_VALUE         40028
 #define _APS_NEXT_CONTROL_VALUE         1001
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
