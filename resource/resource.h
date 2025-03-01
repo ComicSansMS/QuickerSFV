@@ -10,6 +10,10 @@
 #define IDI_ICON_INFO                   108
 #define IDR_ACCELERATOR1                109
 #define IDR_MENU_POPUP                  110
+#define IDD_DIALOG_ABOUT                111
+#define IDC_SYSLINK2                    1003
+#define IDC_SYSLINK3                    1004
+#define IDC_STATIC_HEADER_TEXT          1005
 #define ID_FILE_EXIT                    40001
 #define ID_HELP_ABOUT                   40002
 #define ID_FILE_OPEN                    40003
@@ -35,9 +39,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        111
+#define _APS_NEXT_RESOURCE_VALUE        113
 #define _APS_NEXT_COMMAND_VALUE         40030
-#define _APS_NEXT_CONTROL_VALUE         1001
+#define _APS_NEXT_CONTROL_VALUE         1006
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

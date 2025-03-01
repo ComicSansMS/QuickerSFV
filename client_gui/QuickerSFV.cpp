@@ -31,6 +31,7 @@
 #include <windowsx.h>
 #include <atlbase.h>
 #include <CommCtrl.h>
+#include <shellapi.h>
 #include <ShObjIdl_core.h>
 #include <strsafe.h>
 #include <tchar.h>
@@ -1080,6 +1081,36 @@ struct ClipboardGuard {
 };
 }
 
+INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+    case WM_INITDIALOG: {
+        HWND hStatic = GetDlgItem(hDlg, IDC_STATIC_HEADER_TEXT);
+        HFONT font = CreateFont(32, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS,
+            CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, VARIABLE_PITCH, TEXT("Segoe UI"));;
+        SendMessage(hStatic, WM_SETFONT, std::bit_cast<WPARAM>(font), TRUE);
+        Version const v = quicker_sfv::getVersion();
+        auto const text = formatString(50, TEXT("QuickerSFV v%d.%d.%d"), v.major, v.minor, v.patch);
+        SendMessage(hStatic, WM_SETTEXT, 0, std::bit_cast<LPARAM>(toWcharStr(text)));
+    } return TRUE;
+    case WM_NOTIFY: {
+        LPNMHDR nmh = std::bit_cast<LPNMHDR>(lParam);
+        if ((nmh->code == NM_CLICK) || (nmh->code == NM_RETURN)) {
+            if ((nmh->hwndFrom == GetDlgItem(hDlg, IDC_SYSLINK2)) || (nmh->hwndFrom == GetDlgItem(hDlg, IDC_SYSLINK3))) {
+                PNMLINK pnmlink = std::bit_cast<PNMLINK>(lParam);
+                ShellExecute(nullptr, TEXT("open"), pnmlink->item.szUrl, nullptr, nullptr, SW_SHOW);
+                return TRUE;
+            }
+        }
+    } break;
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK) {
+            EndDialog(hDlg, 1);
+        }
+        break;
+    }
+    return FALSE;
+}
+
 LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (msg == WM_DESTROY) {
         m_scheduler->post(CancelOperation{});
@@ -1094,7 +1125,7 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 SendMessage(hWnd, WM_CLOSE, 0, 0);
                 return 0;
             } else if (LOWORD(wParam) == ID_HELP_ABOUT) {
-                MessageBox(hWnd, TEXT("About this!"), TEXT("About QuickerSFV"), MB_ICONINFORMATION);
+                DialogBox(m_hInstance, MAKEINTRESOURCE(IDD_DIALOG_ABOUT), m_hWnd, AboutDlgProc);
                 return 0;
             } else if (LOWORD(wParam) == ID_FILE_OPEN) {
                 if (auto opt = OpenFile(hWnd, *m_fileProviders); opt) {
@@ -1451,7 +1482,7 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
     m_hListView = CreateWindowEx(WS_EX_CLIENTEDGE,
         WC_LISTVIEW,
         TEXT("Blub"),
-        WS_TABSTOP | WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_AUTOARRANGE | LVS_REPORT | LVS_OWNERDATA,
+        WS_TABSTOP | WS_CHILD | WS_VISIBLE | LVS_AUTOARRANGE | LVS_REPORT | LVS_OWNERDATA,
         0,
         cyChar * 2,
         parent_rect.right - parent_rect.left,
@@ -1552,7 +1583,7 @@ void MainWindow::onCheckStarted(uint32_t n_files) {
     ListView_DeleteAllItems(m_hListView);
     m_listEntries.clear();
     quicker_sfv::Version const v = quicker_sfv::getVersion();
-    addListEntry(formatString(50, TEXT("QuickerSfv v%d.%d.%d"), v.major, v.minor, v.patch));
+    addListEntry(formatString(50, TEXT("QuickerSFV v%d.%d.%d"), v.major, v.minor, v.patch));
     m_stats = Stats{ .total = n_files };
     UpdateStats();
 }
@@ -1665,6 +1696,14 @@ int APIENTRY WinMain(HINSTANCE hInstance,
     gui::CommandLineOptions const command_line_opts = gui::parseCommandLine(assumeUtf8(lpCmdLine));
 
     FileProviders file_providers;
+
+    INITCOMMONCONTROLSEX init_cc_ex{
+        .dwSize = sizeof(INITCOMMONCONTROLSEX),
+        .dwICC = ICC_LINK_CLASS
+    };
+    if (!InitCommonControlsEx(&init_cc_ex)) {
+        return 0;
+    }
 
     WNDCLASS wndClass{
         .style = CS_HREDRAW | CS_VREDRAW,
