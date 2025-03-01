@@ -80,7 +80,8 @@ public:
 
     virtual void onCheckStarted(uint32_t n_files) = 0;
     virtual void onProgress(std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s) = 0;
-    virtual void onFileCompleted(std::u8string_view file, Digest const& checksum, CompletionStatus status) = 0;
+    virtual void onFileCompleted(std::u8string_view file, Digest const& checksum, std::u8string_view absolute_file_path,
+                                 CompletionStatus status) = 0;
     virtual void onCheckCompleted(Result r) = 0;
     virtual void onCancelRequested() = 0;
     virtual void onCanceled() = 0;
@@ -148,6 +149,7 @@ private:
         struct EFileCompleted {
             std::u8string file;
             Digest checksum;
+            std::u8string absolute_file_path;
             EventHandler::CompletionStatus status;
         };
         struct ECheckCompleted {
@@ -186,7 +188,8 @@ private:
 
     void signalCheckStarted(EventHandler* recipient, uint32_t n_files);
     void signalProgress(EventHandler* recipient, std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s);
-    void signalFileCompleted(EventHandler* recipient, std::u8string_view file, Digest checksum, EventHandler::CompletionStatus status);
+    void signalFileCompleted(EventHandler* recipient, std::u8string_view file, Digest checksum,
+                             std::u8string absolute_file_path, EventHandler::CompletionStatus status);
     void signalCheckCompleted(EventHandler* recipient, EventHandler::Result r);
     void signalCancelRequested(EventHandler* recipient);
     void signalCanceled(EventHandler* recipient);
@@ -311,11 +314,17 @@ inline LPCWSTR toWcharStr(std::u16string const& u16str) {
     return reinterpret_cast<LPCWSTR>(u16str.c_str());
 }
 
-std::u16string resolvePath(std::u16string const& path) {
+std::u16string extractBasePathFromChecksumFilePath(std::u16string_view checksum_file_path) {
+    auto it_slash = std::find(checksum_file_path.rbegin(), checksum_file_path.rend(), u'\\').base();
+    return std::u16string{ checksum_file_path.substr(0, std::distance(checksum_file_path.begin(), it_slash)) };
+}
+
+std::u16string resolvePath(std::u16string_view checksum_file_path, std::u8string_view relative_path) {
+    std::u16string const file_path = extractBasePathFromChecksumFilePath(checksum_file_path) + convertToUtf16(relative_path);
     wchar_t empty;
-    DWORD const required_size = GetFullPathName(toWcharStr(path), 0, &empty, nullptr);
+    DWORD const required_size = GetFullPathName(toWcharStr(file_path), 0, &empty, nullptr);
     wchar_t* buffer = new wchar_t[required_size];
-    GetFullPathName(toWcharStr(path), required_size, buffer, nullptr);
+    GetFullPathName(toWcharStr(file_path), required_size, buffer, nullptr);
     std::u16string ret{ assumeUtf16(buffer) };
     delete buffer;
     return ret;
@@ -448,11 +457,6 @@ void Scheduler::doVerify(OperationState& op) {
     auto const offsetLow = [](int64_t i) -> DWORD { return static_cast<DWORD>(i & 0xffffffffull); };
     auto const offsetHigh = [](int64_t i) -> DWORD { return static_cast<DWORD>((i >> 32ull) & 0xffffffffull); };
 
-    std::u16string const base_path = [](std::u16string_view checksum_file_path) -> std::u16string {
-        auto it_slash = std::find(checksum_file_path.rbegin(), checksum_file_path.rend(), u'\\').base();
-        return std::u16string{ checksum_file_path.substr(0, std::distance(checksum_file_path.begin(), it_slash)) };
-    }(op.checksum_path);
-
     constexpr DWORD const BUFFER_SIZE = 4 << 20;
     FileInputWin32 reader(op.checksum_path);
     op.checksum_file = op.checksum_provider->readFromFile(reader);
@@ -487,14 +491,14 @@ void Scheduler::doVerify(OperationState& op) {
         SlidingWindow<std::chrono::nanoseconds, 10> bandwidth_track;
         op.hasher->reset();
 
-        std::u16string const file_path = resolvePath(base_path + convertToUtf16(f.path));
+        std::u16string const file_path = resolvePath(op.checksum_path, f.path);
         HANDLE fin = CreateFile(toWcharStr(file_path), GENERIC_READ, FILE_SHARE_READ, nullptr,
                                 OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED,
                                 nullptr);
         if (fin == INVALID_HANDLE_VALUE) {
             // file missing
             ++result.missing;
-            signalFileCompleted(op.event_handler, f.path, Digest{}, EventHandler::CompletionStatus::Missing);
+            signalFileCompleted(op.event_handler, f.path, Digest{}, convertToUtf8(file_path), EventHandler::CompletionStatus::Missing);
             continue;
         }
         HandleGuard guard_fin(fin);
@@ -613,10 +617,10 @@ void Scheduler::doVerify(OperationState& op) {
         }
         auto const digest = op.hasher->finalize();
         if (digest == f.digest) {
-            signalFileCompleted(op.event_handler, f.path, std::move(digest), EventHandler::CompletionStatus::Ok);
+            signalFileCompleted(op.event_handler, f.path, std::move(digest), convertToUtf8(file_path), EventHandler::CompletionStatus::Ok);
             ++result.ok;
         } else {
-            signalFileCompleted(op.event_handler, f.path, std::move(digest), EventHandler::CompletionStatus::Bad);
+            signalFileCompleted(op.event_handler, f.path, std::move(digest), convertToUtf8(file_path), EventHandler::CompletionStatus::Bad);
             ++result.bad;
         }
     }
@@ -729,14 +733,16 @@ void Scheduler::signalProgress(EventHandler* recipient, std::u8string_view file,
     PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
 }
 
-void Scheduler::signalFileCompleted(EventHandler* recipient, std::u8string_view file, Digest checksum, EventHandler::CompletionStatus status) {
+void Scheduler::signalFileCompleted(EventHandler* recipient, std::u8string_view file, Digest checksum,
+                                    std::u8string absolute_file_path, EventHandler::CompletionStatus status) {
     std::scoped_lock lk(m_mtxEvents);
     m_eventsQueue.emplace_back(Event {
         .recipient = recipient,
         .event = Event::EFileCompleted {
             .file = std::u8string(file),
             .checksum = std::move(checksum),
-            .status = status
+            .absolute_file_path = std::move(absolute_file_path),
+            .status = status,
         }
     });
     PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
@@ -794,7 +800,7 @@ void Scheduler::dispatchEvent(EventHandler* recipient, Event::EProgress const& e
 }
 
 void Scheduler::dispatchEvent(EventHandler* recipient, Event::EFileCompleted const& e) {
-    recipient->onFileCompleted(e.file, e.checksum, e.status);
+    recipient->onFileCompleted(e.file, e.checksum, e.absolute_file_path, e.status);
 }
 
 void Scheduler::dispatchEvent(EventHandler* recipient, Event::ECheckCompleted const& e) {
@@ -907,6 +913,7 @@ private:
             MessageBad,
         } status;
         uint32_t original_position;
+        std::u16string absolute_file_path;
     };
     std::vector<ListViewEntry> m_listEntries;
     struct ListViewSort {
@@ -941,7 +948,7 @@ public:
 
     void onCheckStarted(uint32_t n_files) override;
     void onProgress(std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s) override;
-    void onFileCompleted(std::u8string_view file, Digest const& checksum, CompletionStatus status) override;
+    void onFileCompleted(std::u8string_view file, Digest const& checksum, std::u8string_view absolute_file_path, CompletionStatus status) override;
     void onCheckCompleted(Result r) override;
     void onCancelRequested() override;
     void onCanceled() override;
@@ -956,10 +963,14 @@ private:
 
     void resize();
 
-    void addListEntry(std::u16string name, std::u16string checksum = u"", ListViewEntry::Status status = ListViewEntry::Status::Information);
+    void addListEntry(std::u16string name, std::u16string checksum = {},
+                      ListViewEntry::Status status = ListViewEntry::Status::Information,
+                      std::u16string absolute_file_path = {});
 
+    std::vector<ListViewEntry const*> getSelectedListViewItems() const;
     void doCopySelectionToClipboard();
     void doMarkBadFiles();
+    void doDeleteMarkedFiles();
 };
 
 MainWindow::MainWindow(FileProviders& file_providers, Scheduler& scheduler)
@@ -1136,6 +1147,8 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 doCopySelectionToClipboard();
             } else if (LOWORD(wParam) == ID_CONTEXTMENU_MARKBADFILES) {
                 doMarkBadFiles();
+            } else if (LOWORD(wParam) == ID_CONTEXTMENU_DELETEMARKEDFILES) {
+                doDeleteMarkedFiles();
             }
         } else if (LOWORD(wParam) == ID_ACCELERATOR_COPY) {
             doCopySelectionToClipboard();
@@ -1245,17 +1258,22 @@ LRESULT MainWindow::populateListView(NMHDR* nmh) {
     return 0;
 }
 
-void MainWindow::doCopySelectionToClipboard() {
+std::vector<MainWindow::ListViewEntry const*> MainWindow::getSelectedListViewItems() const {
     std::vector<ListViewEntry const*> selected_items;
-    size_t total_size = 1;
     for (int i = 0, i_end = static_cast<int>(m_listEntries.size()); i != i_end; ++i) {
         if (ListView_GetItemState(m_hListView, i, LVIS_SELECTED) == LVIS_SELECTED) {
             selected_items.push_back(&m_listEntries[i]);
-            total_size += m_listEntries[i].name.size() + 2;
         }
     }
+    return selected_items;
+}
+
+void MainWindow::doCopySelectionToClipboard() {
+    std::vector<ListViewEntry const*> selected_items = getSelectedListViewItems();
+    size_t const total_string_length = std::accumulate(begin(selected_items), end(selected_items), 1ull,
+        [](size_t acc, ListViewEntry const* e) { return acc + e->name.size() + 2; });
     if (selected_items.empty()) { return; }
-    HGLOBAL hmem = GlobalAlloc(GHND, total_size * sizeof(TCHAR));
+    HGLOBAL hmem = GlobalAlloc(GHND, total_string_length * sizeof(TCHAR));
     if (!hmem) { return; }
     GlobalAllocGuard guard_hmem(hmem);
     {
@@ -1291,6 +1309,29 @@ void MainWindow::doMarkBadFiles() {
             ListView_SetItemState(m_hListView, i, LVIS_SELECTED, LVIS_SELECTED);
         }
     }
+}
+
+void MainWindow::doDeleteMarkedFiles() {
+    std::vector<ListViewEntry const*> selected_items = getSelectedListViewItems();
+    selected_items.erase(
+        std::remove_if(begin(selected_items), end(selected_items), [](ListViewEntry const* e) {
+                return (e->status != ListViewEntry::Status::Ok) &&
+                    (e->status != ListViewEntry::Status::FailedMismatch);
+            }), end(selected_items));
+    if (selected_items.empty()) { return; }
+    int const answer = MessageBox(m_hWnd,
+        toWcharStr(formatString(72, TEXT("%d file%s will be deleted from disk.\n\nAre you sure?"),
+                                selected_items.size(), (selected_items.size() == 1 ? TEXT("") : TEXT("s")))), 
+        TEXT("QuickerSFV"), MB_YESNO | MB_ICONEXCLAMATION);
+    if (answer != IDYES) { return; }
+    for (auto const& f : selected_items) {
+        if (DeleteFile(toWcharStr(f->absolute_file_path)) != 0) {
+            auto it = std::find_if(begin(m_listEntries), end(m_listEntries),
+                [p = f->original_position](ListViewEntry const& l) { return l.original_position == p; });
+            if (it != end(m_listEntries)) { m_listEntries.erase(it); }
+        }
+    }
+    ListView_SetItemCountEx(m_hListView, m_listEntries.size(), 0);
 }
 
 BOOL MainWindow::createMainWindow(HINSTANCE hInstance, int nCmdShow,
@@ -1486,12 +1527,13 @@ void MainWindow::resize() {
     MoveWindow(m_hListView, 0, textFieldHeight, new_width, rect.bottom - textFieldHeight, TRUE);
 }
 
-void MainWindow::addListEntry(std::u16string name, std::u16string checksum, ListViewEntry::Status status) {
+void MainWindow::addListEntry(std::u16string name, std::u16string checksum, ListViewEntry::Status status, std::u16string absolute_file_path) {
     m_listEntries.push_back(ListViewEntry{
         .name = std::move(name),
         .checksum = std::move(checksum),
         .status = status,
-        .original_position = static_cast<uint32_t>(m_listEntries.size())
+        .original_position = static_cast<uint32_t>(m_listEntries.size()),
+        .absolute_file_path = std::move(absolute_file_path)
     });
     ListView_SetItemCountEx(m_hListView, m_listEntries.size(), 0);
 }
@@ -1520,21 +1562,21 @@ void MainWindow::onProgress(std::u8string_view file, uint32_t percentage, uint32
     UpdateStats();
 }
 
-void MainWindow::onFileCompleted(std::u8string_view file, Digest const& checksum, CompletionStatus status) {
+void MainWindow::onFileCompleted(std::u8string_view file, Digest const& checksum, std::u8string_view absolute_file_path, CompletionStatus status) {
     ++m_stats.completed;
     m_stats.progress = 0;
     m_stats.bandwidth = 0;
     switch (status) {
     case CompletionStatus::Ok:
-        addListEntry(convertToUtf16(file), convertToUtf16(checksum.toString()), ListViewEntry::Status::Ok);
+        addListEntry(convertToUtf16(file), convertToUtf16(checksum.toString()), ListViewEntry::Status::Ok, convertToUtf16(absolute_file_path));
         ++m_stats.ok;
         break;
     case CompletionStatus::Missing:
-        addListEntry(convertToUtf16(file), {}, ListViewEntry::Status::FailedMissing);
+        addListEntry(convertToUtf16(file), {}, ListViewEntry::Status::FailedMissing, convertToUtf16(absolute_file_path));
         ++m_stats.missing;
         break;
     case CompletionStatus::Bad:
-        addListEntry(convertToUtf16(file), convertToUtf16(checksum.toString()), ListViewEntry::Status::FailedMismatch);
+        addListEntry(convertToUtf16(file), convertToUtf16(checksum.toString()), ListViewEntry::Status::FailedMismatch, convertToUtf16(absolute_file_path));
         ++m_stats.bad;
         break;
     }
