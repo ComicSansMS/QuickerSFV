@@ -20,7 +20,16 @@ project(QuickerSFV
     HOMEPAGE_URL https://github.com/ComicSansMS/QuickerSFV/
 )
 
-find_package(OpenSSL REQUIRED)
+if(MSVC)
+    option(QUICKER_SFV_USE_BUNDLED_OPENSSL "Use the minimal bundled version of OpenSSL." OFF)
+else()
+    set(QUICKER_SFV_USE_BUNDLED_OPENSSL OFF)
+endif()
+if(QUICKER_SFV_USE_BUNDLED_OPENSSL)
+    add_subdirectory(external/openssl)
+else()
+    find_package(OpenSSL REQUIRED)
+endif()
 
 option(BUILD_TESTS "Determines whether to build tests." ON)
 if(BUILD_TESTS)

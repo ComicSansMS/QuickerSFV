@@ -10,6 +10,8 @@
 *.hpp text
 *.txt text
 *.svg text
+*.asm text
+*.S text
 
 # Visual Studio specific files
 *.sln text eol=crlf
