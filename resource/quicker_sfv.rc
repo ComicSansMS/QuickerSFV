@@ -156,6 +156,7 @@ END
 IDR_ACCELERATOR1 ACCELERATORS
 BEGIN
     "^C",           ID_ACCELERATOR_COPY,    ASCII,  NOINVERT
+    "^A",           ID_ACCELERATOR_SELECT_ALL, ASCII, NOINVERT
 END
 
 #endif    // English (United States) resources

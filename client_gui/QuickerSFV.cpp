@@ -1152,6 +1152,8 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
         } else if (LOWORD(wParam) == ID_ACCELERATOR_COPY) {
             doCopySelectionToClipboard();
+        } else if (LOWORD(wParam) == ID_ACCELERATOR_SELECT_ALL) {
+            ListView_SetItemState(m_hListView, -1, LVIS_SELECTED, LVIS_SELECTED);
         }
     } else if (msg == WM_NOTIFY) {
         NMHDR* nmh = std::bit_cast<LPNMHDR>(lParam);
