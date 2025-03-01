@@ -35,8 +35,8 @@ std::u8string CrcDigest::toString() const {
     std::u8string ret;
     ret.reserve(5);
     auto bytes = std::span<std::byte const>(reinterpret_cast<std::byte const*>(&data), 4);
-    for (std::byte const& b : bytes) {
-        auto const n = string_conversion::byte_to_hex_str(b);
+    for (auto it = bytes.rbegin(), it_end = bytes.rend(); it != it_end; ++it) {
+        auto const n = string_conversion::byte_to_hex_str(*it);
         ret.push_back(n.higher);
         ret.push_back(n.lower);
     }
