@@ -7,8 +7,10 @@
 
 #include <quicker_sfv/ui/event_handler.hpp>
 
+#include <chrono>
 #include <condition_variable>
 #include <mutex>
+#include <span>
 #include <variant>
 #include <vector>
 
@@ -112,6 +114,21 @@ private:
     void worker();
     void doVerify(OperationState& op);
     void doCreate(OperationState& op);
+    enum class HashResult {
+        Ok,
+        Bad,
+        Missing,
+        Canceled,
+        Error,
+    };
+    struct HashReadState {
+        std::vector<char> buffer;
+        HANDLE event;
+        OVERLAPPED overlapped;
+        bool pending;
+        std::chrono::steady_clock::time_point t;
+    };
+    HashResult hashFile(OperationState& op, ChecksumFile::Entry const& f, std::span<HashReadState, 2> read_states);
 
     void signalCheckStarted(EventHandler* recipient, uint32_t n_files);
     void signalProgress(EventHandler* recipient, std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s);

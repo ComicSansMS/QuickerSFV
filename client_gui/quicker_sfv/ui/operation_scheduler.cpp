@@ -12,6 +12,8 @@
 
 namespace quicker_sfv::gui {
 
+static constexpr DWORD const HASH_FILE_BUFFER_SIZE = 4 << 20;
+
 namespace {
 class FileInputWin32 : public FileInput {
 private:
@@ -126,7 +128,7 @@ std::generator<FileInfo> iterateFiles(std::u16string const& base_path) {
     }
 }
 
-Digest hashFile(Hasher& hasher, LPCWSTR filepath, uint64_t filesize) {
+Digest hashFile_old(Hasher& hasher, LPCWSTR filepath, uint64_t filesize) {
     hasher.reset();
     HANDLE hin = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
     if (hin == INVALID_HANDLE_VALUE) {
@@ -290,11 +292,145 @@ public:
 
 } // anonymous namespace
 
-void OperationScheduler::doVerify(OperationState& op) {
+OperationScheduler::HashResult OperationScheduler::hashFile(OperationState& op, ChecksumFile::Entry const& f, std::span<HashReadState, 2> read_states) {
     auto const offsetLow = [](int64_t i) -> DWORD { return static_cast<DWORD>(i & 0xffffffffull); };
     auto const offsetHigh = [](int64_t i) -> DWORD { return static_cast<DWORD>((i >> 32ull) & 0xffffffffull); };
 
-    constexpr DWORD const BUFFER_SIZE = 4 << 20;
+    SlidingWindow<std::chrono::nanoseconds, 10> bandwidth_track;
+    op.hasher->reset();
+
+    std::u16string const file_path = resolvePath(op.checksum_path, f.path);
+    HANDLE fin = CreateFile(toWcharStr(file_path), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                            OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED,
+                            nullptr);
+    if (fin == INVALID_HANDLE_VALUE) {
+        // file missing
+        signalFileCompleted(op.event_handler, f.path, Digest{}, convertToUtf8(file_path), EventHandler::CompletionStatus::Missing);
+        return HashResult::Missing;
+    }
+    HandleGuard guard_fin(fin);
+
+    int64_t read_offset = 0;
+    int64_t bytes_hashed = 0;
+    bool is_eof = false;
+    bool is_canceled = false;
+    bool is_error = false;
+    int64_t const file_size = [&is_error, fin]() -> int64_t {
+        LARGE_INTEGER l_file_size;
+        if (!GetFileSizeEx(fin, &l_file_size)) {
+            is_error = true;
+            return 0;
+        }
+        return l_file_size.QuadPart;
+    }();
+
+    for (auto& rs : read_states) { rs.pending = false; }
+    size_t front = 0;
+    size_t back = 1;
+    read_states[front].overlapped = OVERLAPPED{
+        .Offset = offsetLow(read_offset),
+        .OffsetHigh = offsetHigh(read_offset),
+        .hEvent = read_states[front].event
+    };
+    read_states[front].t = std::chrono::steady_clock::now();
+    if (!ReadFile(fin, read_states[front].buffer.data(), HASH_FILE_BUFFER_SIZE, nullptr, &read_states[front].overlapped)) {
+        DWORD const err = GetLastError();
+        if (err == ERROR_HANDLE_EOF) {
+            // eof before async
+            is_eof = true;
+        } else if (err == ERROR_IO_PENDING) {
+            read_states[front].pending = true;
+        } else {
+            // file read error
+            is_error = true;
+        }
+    }
+    read_offset += read_states[front].buffer.size();
+    uint32_t last_progress = 0;
+    while (!is_eof && !is_canceled && !is_error) {
+        read_states[back].overlapped = OVERLAPPED{
+                .Offset = offsetLow(read_offset),
+                .OffsetHigh = offsetHigh(read_offset),
+                .hEvent = read_states[back].event
+        };
+        read_states[back].t = std::chrono::steady_clock::now();
+        if (!ReadFile(fin, read_states[back].buffer.data(), HASH_FILE_BUFFER_SIZE, nullptr, &read_states[back].overlapped)) {
+            DWORD const err = GetLastError();
+            if (err == ERROR_HANDLE_EOF) {
+                // eof before async
+                is_eof = true;
+            } else if (err == ERROR_IO_PENDING) {
+                read_states[back].pending = true;
+            } else {
+                // file read error
+                is_error = true;
+                break;
+            }
+        }
+        read_offset += read_states[front].buffer.size();
+
+        DWORD bytes_read = 0;
+        // cancel event has to go first, or it will get starved by completing i/os
+        HANDLE event_handles[] = { m_cancelEvent, read_states[front].event };
+        DWORD const wait_ret = WaitForMultipleObjects(2, event_handles, FALSE, INFINITE);
+        if (wait_ret == WAIT_OBJECT_0 + 1) {
+            // read successful
+            read_states[front].pending = false;
+            if (!GetOverlappedResult(fin, &read_states[front].overlapped, &bytes_read, FALSE)) {
+                if (GetLastError() == ERROR_HANDLE_EOF) {
+                    // eof
+                    is_eof = true;
+                } else {
+                    // file read error
+                    is_error = true;
+                    break;
+                }
+            } else {
+                if (bytes_read == HASH_FILE_BUFFER_SIZE) { bandwidth_track.push(std::chrono::steady_clock::now() - read_states[front].t); }
+            }
+        } else if (wait_ret == WAIT_OBJECT_0) {
+            // cancel
+            CancelIo(fin);
+            is_canceled = true;
+            break;
+        } else {
+            // catastrophic error: unexpected wait result
+            return HashResult::Error;
+        }
+
+        op.hasher->addData(std::span<char const>(read_states[front].buffer.data(), bytes_read));
+        bytes_hashed += bytes_read;
+        uint32_t current_progress = static_cast<uint32_t>(bytes_hashed * 100 / file_size);
+        if (current_progress != last_progress) {
+            int64_t const t_avg = bandwidth_track.rollingAverage().count();
+            uint32_t const bandwidth_mib_s = static_cast<uint32_t>((t_avg) ? ((static_cast<int64_t>(HASH_FILE_BUFFER_SIZE) * 1'000'000'000ll) / (t_avg * 1'048'576ll)) : 0);
+            signalProgress(op.event_handler, f.path, current_progress, bandwidth_mib_s);
+            last_progress = current_progress;
+        }
+
+        std::swap(front, back);
+    }
+    for (auto& rs : read_states) {
+        if (rs.pending) { WaitForSingleObject(rs.event, INFINITE); DWORD b; GetOverlappedResult(fin, &rs.overlapped, &b, TRUE); }
+    }
+    if (is_canceled) {
+        signalCanceled(op.event_handler);
+        return HashResult::Canceled;
+    }
+    if (is_error) {
+        return HashResult::Error;
+    }
+    auto const digest = op.hasher->finalize();
+    if (digest == f.digest) {
+        signalFileCompleted(op.event_handler, f.path, std::move(digest), convertToUtf8(file_path), EventHandler::CompletionStatus::Ok);
+        return HashResult::Ok;
+    } else {
+        signalFileCompleted(op.event_handler, f.path, std::move(digest), convertToUtf8(file_path), EventHandler::CompletionStatus::Bad);
+        return HashResult::Bad;
+    }
+}
+
+void OperationScheduler::doVerify(OperationState& op) {
     FileInputWin32 reader(op.checksum_path);
     op.checksum_file = op.checksum_provider->readFromFile(reader);
     EventHandler::Result result{};
@@ -314,151 +450,39 @@ void OperationScheduler::doVerify(OperationState& op) {
     }
     HandleGuard guard_event_back(event_back);
 
-    std::vector<char> front_buffer;
-    front_buffer.resize(BUFFER_SIZE);
-    std::vector<char> back_buffer;
-    back_buffer.resize(BUFFER_SIZE);
-
-    std::chrono::steady_clock::time_point t_front;
-    std::chrono::steady_clock::time_point t_back;
-
-    uint32_t last_progress = 0;
+    HashReadState read_states[] = {
+        HashReadState{
+            .buffer = std::vector<char>(HASH_FILE_BUFFER_SIZE),
+            .event = event_front,
+            .overlapped = {},
+            .pending = false,
+            .t = {}
+        },
+        HashReadState{
+            .buffer = std::vector<char>(HASH_FILE_BUFFER_SIZE),
+            .event = event_back,
+            .overlapped = {},
+            .pending = false,
+            .t = {}
+        },
+    };
 
     for (auto const& f : op.checksum_file.getEntries()) {
-        SlidingWindow<std::chrono::nanoseconds, 10> bandwidth_track;
-        op.hasher->reset();
-
-        std::u16string const file_path = resolvePath(op.checksum_path, f.path);
-        HANDLE fin = CreateFile(toWcharStr(file_path), GENERIC_READ, FILE_SHARE_READ, nullptr,
-                                OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED,
-                                nullptr);
-        if (fin == INVALID_HANDLE_VALUE) {
-            // file missing
-            ++result.missing;
-            signalFileCompleted(op.event_handler, f.path, Digest{}, convertToUtf8(file_path), EventHandler::CompletionStatus::Missing);
-            continue;
-        }
-        HandleGuard guard_fin(fin);
-
-        int64_t read_offset = 0;
-        int64_t bytes_hashed = 0;
-        bool is_eof = false;
-        bool is_canceled = false;
-        bool is_error = false;
-        int64_t const file_size = [&is_error, fin]() -> int64_t {
-            LARGE_INTEGER l_file_size;
-            if (!GetFileSizeEx(fin, &l_file_size)) {
-                is_error = true;
-                return 0;
-            }
-            return l_file_size.QuadPart;
-        }();
-
-        bool front_pending = false;
-        bool back_pending = false;
-        OVERLAPPED overlapped_storage[2] = {};
-        LPOVERLAPPED overlapped_front = &overlapped_storage[0];
-        LPOVERLAPPED overlapped_back = &overlapped_storage[1];
-        *overlapped_front = OVERLAPPED{
-            .Offset = offsetLow(read_offset),
-            .OffsetHigh = offsetHigh(read_offset),
-            .hEvent = event_front
-        };
-        t_front = std::chrono::steady_clock::now();
-        if (!ReadFile(fin, front_buffer.data(), BUFFER_SIZE, nullptr, overlapped_front)) {
-            DWORD const err = GetLastError();
-            if (err == ERROR_HANDLE_EOF) {
-                // eof before async
-                is_eof = true;
-            } else if (err == ERROR_IO_PENDING) {
-                front_pending = true;
-            } else {
-                // file read error
-                is_error = true;
-                break;
-            }
-        }
-        read_offset += front_buffer.size();
-        while (!is_eof && !is_canceled && !is_error) {
-            *overlapped_back = OVERLAPPED{
-                    .Offset = offsetLow(read_offset),
-                    .OffsetHigh = offsetHigh(read_offset),
-                    .hEvent = event_back
-            };
-            t_back = std::chrono::steady_clock::now();
-            if (!ReadFile(fin, back_buffer.data(), BUFFER_SIZE, nullptr, overlapped_back)) {
-                DWORD const err = GetLastError();
-                if (err == ERROR_HANDLE_EOF) {
-                    // eof before async
-                    is_eof = true;
-                } else if (err == ERROR_IO_PENDING) {
-                    back_pending = true;
-                } else {
-                    // file read error
-                    is_error = true;
-                    break;
-                }
-            }
-            read_offset += front_buffer.size();
-
-            DWORD bytes_read = 0;
-            // cancel event has to go first, or it will get starved by completing i/os
-            HANDLE event_handles[] = { m_cancelEvent, event_front };
-            DWORD const wait_ret = WaitForMultipleObjects(2, event_handles, FALSE, INFINITE);
-            if (wait_ret == WAIT_OBJECT_0 + 1) {
-                // read successful
-                front_pending = false;
-                if (!GetOverlappedResult(fin, overlapped_front, &bytes_read, FALSE)) {
-                    if (GetLastError() == ERROR_HANDLE_EOF) {
-                        // eof
-                        is_eof = true;
-                    } else {
-                        // file read error
-                        is_error = true;
-                        break;
-                    }
-                } else {
-                    if (bytes_read == BUFFER_SIZE) { bandwidth_track.push(std::chrono::steady_clock::now() - t_front); }
-                }
-            } else if (wait_ret == WAIT_OBJECT_0) {
-                // cancel
-                CancelIo(fin);
-                is_canceled = true;
-                break;
-            } else {
-                // catastrophic error: unexpected wait result
-                throwException(Error::Failed);
-            }
-
-            op.hasher->addData(std::span<char const>(front_buffer.data(), bytes_read));
-            bytes_hashed += bytes_read;
-            uint32_t current_progress = static_cast<uint32_t>(bytes_hashed * 100 / file_size);
-            if (current_progress != last_progress) {
-                int64_t const t_avg = bandwidth_track.rollingAverage().count();
-                uint32_t const bandwidth_mib_s = static_cast<uint32_t>((t_avg) ? ((static_cast<int64_t>(BUFFER_SIZE) * 1'000'000'000ll) / (t_avg * 1'048'576ll)) : 0);
-                signalProgress(op.event_handler, f.path, current_progress, bandwidth_mib_s);
-                last_progress = current_progress;
-            }
-
-            std::swap(front_buffer, back_buffer);
-            std::swap(event_front, event_back);
-            std::swap(overlapped_front, overlapped_back);
-            std::swap(front_pending, back_pending);
-            std::swap(t_front, t_back);
-        }
-        if (front_pending) { WaitForSingleObject(event_front, INFINITE); DWORD b; GetOverlappedResult(fin, overlapped_front, &b, TRUE); }
-        if (back_pending) { WaitForSingleObject(event_back, INFINITE); DWORD b; GetOverlappedResult(fin, overlapped_back, &b, TRUE); }
-        if (is_canceled) {
-            signalCanceled(op.event_handler);
-            return;
-        }
-        auto const digest = op.hasher->finalize();
-        if (digest == f.digest) {
-            signalFileCompleted(op.event_handler, f.path, std::move(digest), convertToUtf8(file_path), EventHandler::CompletionStatus::Ok);
+        switch (hashFile(op, f, read_states)) {
+        case HashResult::Ok:
             ++result.ok;
-        } else {
-            signalFileCompleted(op.event_handler, f.path, std::move(digest), convertToUtf8(file_path), EventHandler::CompletionStatus::Bad);
+            break;
+        case HashResult::Bad:
             ++result.bad;
+            break;
+        case HashResult::Error:
+            // @todo
+            break;
+        case HashResult::Missing:
+            ++result.missing;
+            break;
+        case HashResult::Canceled:
+            break;
         }
     }
     signalCheckCompleted(op.event_handler, result);
@@ -466,7 +490,7 @@ void OperationScheduler::doVerify(OperationState& op) {
 
 void OperationScheduler::doCreate(OperationState& op) {
     for (auto const& [abs, rel, size] : iterateFiles(op.folder_path)) {
-        op.checksum_file.addEntry(convertToUtf8(rel), hashFile(*op.hasher, abs, size));
+        op.checksum_file.addEntry(convertToUtf8(rel), hashFile_old(*op.hasher, abs, size));
     }
     FileOutputWin32 writer(op.checksum_path);
     op.checksum_provider->serialize(writer, op.checksum_file);
