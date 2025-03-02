@@ -1085,13 +1085,23 @@ INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
     switch (msg) {
     case WM_INITDIALOG: {
         HWND hStatic = GetDlgItem(hDlg, IDC_STATIC_HEADER_TEXT);
-        HFONT font = CreateFont(32, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS,
-            CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, VARIABLE_PITCH, TEXT("Segoe UI"));;
+        LOGFONT logfont {
+            .lfHeight = 32, .lfWidth = 0, .lfEscapement = 0, .lfOrientation = 0, .lfWeight = FW_BOLD, .lfItalic = FALSE,
+            .lfUnderline = FALSE, .lfStrikeOut = FALSE, .lfCharSet = ANSI_CHARSET, .lfOutPrecision = OUT_TT_PRECIS,
+            .lfClipPrecision = CLIP_DEFAULT_PRECIS, .lfQuality = CLEARTYPE_QUALITY, .lfPitchAndFamily = VARIABLE_PITCH,
+            .lfFaceName = TEXT("Segoe")
+        };
+        HFONT font = CreateFontIndirect(&logfont);
         SendMessage(hStatic, WM_SETFONT, std::bit_cast<WPARAM>(font), TRUE);
         Version const v = quicker_sfv::getVersion();
         auto const text = formatString(50, TEXT("QuickerSFV v%d.%d.%d"), v.major, v.minor, v.patch);
         SendMessage(hStatic, WM_SETTEXT, 0, std::bit_cast<LPARAM>(toWcharStr(text)));
     } return TRUE;
+    case WM_DESTROY: {
+        HWND hStatic = GetDlgItem(hDlg, IDC_STATIC_HEADER_TEXT);
+        HFONT font = std::bit_cast<HFONT>(SendMessage(hStatic, WM_GETFONT, 0, 0));
+        DeleteFont(font);
+    } return FALSE;
     case WM_NOTIFY: {
         LPNMHDR nmh = std::bit_cast<LPNMHDR>(lParam);
         if ((nmh->code == NM_CLICK) || (nmh->code == NM_RETURN)) {
