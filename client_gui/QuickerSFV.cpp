@@ -157,6 +157,8 @@ private:
     HasherOptions m_options;
     FileProviders* m_fileProviders;
     OperationScheduler* m_scheduler;
+
+    std::u16string m_outFile;
 public:
     explicit MainWindow(FileProviders& file_providers, OperationScheduler& scheduler);
 
@@ -184,6 +186,8 @@ public:
     void onCanceled() override;
     void onError(quicker_sfv::Error error, std::u8string_view msg) override;
 
+    void setOutFile(std::u16string out_file);
+    void writeResultsToFile() const;
 private:
     LRESULT createUiElements(HWND parent_hwnd);
 
@@ -201,11 +205,13 @@ private:
     void doCopySelectionToClipboard();
     void doMarkBadFiles();
     void doDeleteMarkedFiles();
+
+    static TCHAR const* getStatusTextForStatus(ListViewEntry::Status s);
 };
 
 MainWindow::MainWindow(FileProviders& file_providers, OperationScheduler& scheduler)
-    :m_hInstance(nullptr), m_windowTitle(nullptr), m_hWnd(nullptr), m_hTextFieldLeft(nullptr), m_hTextFieldRight(nullptr),
-     m_hListView(nullptr), m_imageList(nullptr), m_hPopupMenu(nullptr),
+    :m_hInstance(nullptr), m_windowTitle(nullptr), m_hWnd(nullptr), m_hMenu(nullptr), m_hTextFieldLeft(nullptr),
+     m_hTextFieldRight(nullptr), m_hListView(nullptr), m_imageList(nullptr), m_hPopupMenu(nullptr),
      m_stats{}, m_listSort{ .sort_column = 0, .order = ListViewSort::Order::Original },
      m_options{ .has_sse42 = true, .has_avx512 = false}, m_fileProviders(&file_providers), m_scheduler(&scheduler)
 {
@@ -437,6 +443,11 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
+TCHAR const* MainWindow::getStatusTextForStatus(ListViewEntry::Status s) {
+    TCHAR const* status_texts[] = { TEXT("OK"), TEXT("FAILED. Checksum mismatch"), TEXT("FAILED. File does not exist"), TEXT("") };
+    return status_texts[std::min<int>(s, ARRAYSIZE(status_texts) - 1)];
+}
+
 LRESULT MainWindow::populateListView(NMHDR* nmh) {
     if (nmh->code == LVN_GETDISPINFO) {
         NMLVDISPINFO* disp_info = std::bit_cast<NMLVDISPINFO*>(nmh);
@@ -453,9 +464,8 @@ LRESULT MainWindow::populateListView(NMHDR* nmh) {
                     toWcharStr(entry.checksum), _TRUNCATE);
             } else if (disp_info->item.iSubItem == 2) {
                 // status
-                TCHAR const* status_text[] = { TEXT("OK"), TEXT("FAILED. Checksum mismatch"), TEXT("FAILED. File does not exist"), TEXT("") };
                 _tcsncpy_s(disp_info->item.pszText, disp_info->item.cchTextMax,
-                    status_text[std::min<int>(entry.status, ARRAYSIZE(status_text) - 1)], _TRUNCATE);
+                           getStatusTextForStatus(entry.status), _TRUNCATE);
             }
         } 
         if (disp_info->item.mask & LVIF_IMAGE) {
@@ -888,6 +898,11 @@ void MainWindow::onCheckCompleted(Result r) {
     }
     ListView_EnsureVisible(m_hListView, m_listEntries.size() - 1, FALSE);
     UpdateStats();
+    if (!m_hWnd) {
+        // we're running in no-gui mode; write results to file and quit
+        writeResultsToFile();
+        PostQuitMessage(0);
+    }
 }
 
 void MainWindow::onCancelRequested() {
@@ -899,6 +914,33 @@ void MainWindow::onCanceled() {
 void MainWindow::onError(quicker_sfv::Error error, std::u8string_view msg) {
     UNREFERENCED_PARAMETER(error);
     addListEntry(formatString(255, TEXT("ERROR: %s (%d)"), convertToUtf16(msg).c_str(), static_cast<int>(error)), {}, ListViewEntry::MessageBad);
+}
+
+void MainWindow::setOutFile(std::u16string out_file) {
+    m_outFile = std::move(out_file);
+}
+
+void MainWindow::writeResultsToFile() const {
+    // all operations in here are best effort, as we have no sensible way to report errors
+    HANDLE fout = CreateFile(toWcharStr(m_outFile.c_str()), GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+                             CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (fout == INVALID_HANDLE_VALUE) {
+        return;
+    }
+    for (auto const& e : m_listEntries) {
+        std::u8string msg;
+        if ((e.status == ListViewEntry::Status::Ok) || (e.status == ListViewEntry::Status::FailedMissing) || (e.status == ListViewEntry::Status::FailedMismatch)) {
+            msg = convertToUtf8(e.name) + u8": " +
+                convertToUtf8(e.checksum) + u8":  " +
+                convertToUtf8(assumeUtf16(getStatusTextForStatus(e.status)));
+        } else {
+            msg = convertToUtf8(e.name);
+        }
+        msg.push_back(u8'\r');
+        msg.push_back(u8'\n');
+        WriteFile(fout, msg.data(), static_cast<DWORD>(msg.size()), nullptr, nullptr);
+    }
+    CloseHandle(fout);
 }
 
 void MainWindow::UpdateStats() {
@@ -927,9 +969,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 int APIENTRY WinMain(HINSTANCE hInstance,
-                     HINSTANCE /* hPrevInstance */,
-                     LPSTR     lpCmdLine,
-                     int       nCmdShow)
+    HINSTANCE /* hPrevInstance */,
+    LPSTR     lpCmdLine,
+    int       nCmdShow)
 {
     enforce(GetACP() == 65001);  // utf-8 codepage
 
@@ -937,45 +979,52 @@ int APIENTRY WinMain(HINSTANCE hInstance,
     TCHAR const window_title[] = TEXT("QuickerSFV");
 
     gui::CommandLineOptions const command_line_opts = gui::parseCommandLine(assumeUtf8(lpCmdLine));
+    bool const no_gui_window = !command_line_opts.outFile.empty();
 
     FileProviders file_providers;
 
-    INITCOMMONCONTROLSEX init_cc_ex{
-        .dwSize = sizeof(INITCOMMONCONTROLSEX),
-        .dwICC = ICC_LINK_CLASS
-    };
-    if (!InitCommonControlsEx(&init_cc_ex)) {
-        return 0;
-    }
+    if (!no_gui_window) {
+        INITCOMMONCONTROLSEX init_cc_ex{
+            .dwSize = sizeof(INITCOMMONCONTROLSEX),
+            .dwICC = ICC_LINK_CLASS
+        };
+        if (!InitCommonControlsEx(&init_cc_ex)) {
+            return 0;
+        }
 
-    WNDCLASS wndClass{
-        .style = CS_HREDRAW | CS_VREDRAW,
-        .lpfnWndProc = WndProc,
-        .cbClsExtra = 0,
-        .cbWndExtra = sizeof(MainWindow*),
-        .hInstance = hInstance,
-        .hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON_MAIN_WINDOW)),
-        .hCursor = LoadCursor(nullptr, IDC_ARROW),
-        .hbrBackground = static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)),
-        .lpszMenuName = nullptr,
-        .lpszClassName = class_name
-    };
+        WNDCLASS wndClass{
+            .style = CS_HREDRAW | CS_VREDRAW,
+            .lpfnWndProc = WndProc,
+            .cbClsExtra = 0,
+            .cbWndExtra = sizeof(MainWindow*),
+            .hInstance = hInstance,
+            .hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON_MAIN_WINDOW)),
+            .hCursor = LoadCursor(nullptr, IDC_ARROW),
+            .hbrBackground = static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)),
+            .lpszMenuName = nullptr,
+            .lpszClassName = class_name
+        };
 
-    ATOM registered_class = RegisterClass(&wndClass);
-    if (!registered_class) {
-        MessageBox(nullptr, TEXT("Error registering class"), window_title, MB_ICONERROR);
-        return 0;
+        ATOM registered_class = RegisterClass(&wndClass);
+        if (!registered_class) {
+            MessageBox(nullptr, TEXT("Error registering class"), window_title, MB_ICONERROR);
+            return 0;
+        }
     }
 
     OperationScheduler scheduler;
     MainWindow main_window(file_providers, scheduler);
-    if (!main_window.createMainWindow(hInstance, nCmdShow, class_name, window_title)) {
-        return 0;
-    }
-
-    HACCEL hAccelerators = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDR_ACCELERATOR1));
-    if (!hAccelerators) {
-        return 0;
+    HACCEL hAccelerators = nullptr;
+    if (no_gui_window) {
+        main_window.setOutFile(command_line_opts.outFile);
+    } else {
+        if (!main_window.createMainWindow(hInstance, nCmdShow, class_name, window_title)) {
+            return 0;
+        }
+        hAccelerators = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDR_ACCELERATOR1));
+        if (!hAccelerators) {
+            return 0;
+        }
     }
 
     scheduler.start();
@@ -1005,7 +1054,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
             MessageBox(nullptr, TEXT("Error in GetMessage"), window_title, MB_ICONERROR);
             return 0;
         } else {
-            if (!TranslateAccelerator(main_window.getHwnd(), hAccelerators, &message))
+            if (!hAccelerators || !TranslateAccelerator(main_window.getHwnd(), hAccelerators, &message))
             {
                 TranslateMessage(&message);
                 DispatchMessage(&message);

@@ -98,6 +98,7 @@ inline std::vector<std::u8string> commandLineLexer(std::u8string_view str) {
 
 struct CommandLineOptions {
     std::vector<std::u16string> filesToCheck;
+    std::u16string outFile;
 
     friend bool operator==(CommandLineOptions const&, CommandLineOptions const&) = default;
     friend bool operator!=(CommandLineOptions const&, CommandLineOptions const&) = default;
@@ -108,7 +109,18 @@ inline CommandLineOptions parseCommandLine(std::u8string_view str) {
     std::vector<std::u8string> const args = commandLineLexer(str);
     CommandLineOptions opts;
     for (auto const& f : args) {
+        if (f == u8"DOALL") {
+            // ignore DOALL option - we always verify everything
+            continue;
+        } else if (f.starts_with(u8"OUTPUT:")) {
+            opts.outFile = convertToUtf16(f.substr(7));
+            continue;
+        }
         opts.filesToCheck.push_back(convertToUtf16(f));
+    }
+    if (!opts.outFile.empty()) {
+        // in no-GUI mode, only allow checking a single file
+        opts.filesToCheck.resize(1);
     }
     return opts;
 }

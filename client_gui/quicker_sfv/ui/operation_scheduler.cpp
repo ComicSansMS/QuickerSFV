@@ -24,7 +24,7 @@ public:
         :m_eof(false)
     {
         m_fin = CreateFile(toWcharStr(filename), GENERIC_READ, FILE_SHARE_READ, nullptr,
-            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (m_fin == INVALID_HANDLE_VALUE) {
             std::abort();
         }
@@ -57,7 +57,7 @@ public:
     FileOutputWin32(std::u16string const& filename)
     {
         m_fout = CreateFile(toWcharStr(filename), GENERIC_WRITE, FILE_SHARE_READ, nullptr,
-            CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+                            CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (m_fout == INVALID_HANDLE_VALUE) {
             throwException(Error::FileIO);
         }
