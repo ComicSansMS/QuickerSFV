@@ -6,11 +6,11 @@
 namespace quicker_sfv {
 
 enum class Error {
-    Failed,
-    HasherFailure,
-    ParserError,
-    FileIO,
-    InvalidArgument,
+    Failed          = 1,
+    SystemError     = 3,
+    FileIO          = 5,
+    HasherFailure   = 10,
+    ParserError     = 11,
 };
 
 [[noreturn]] void throwException(Error e);

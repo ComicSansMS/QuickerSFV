@@ -168,7 +168,7 @@ void OperationScheduler::start() {
     m_startingThreadId = GetCurrentThreadId();
     m_cancelEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
     if (!m_cancelEvent) {
-        throwException(Error::Failed);
+        throwException(Error::SystemError);
     }
     m_worker = std::thread([this]() { worker(); });
 }
@@ -439,14 +439,14 @@ void OperationScheduler::doVerify(OperationState& op) {
 
     HANDLE event_front = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     if (!event_front) {
-        // catastrophic error
-        throwException(Error::Failed);
+        signalError(op.event_handler, Error::SystemError, {});
+        return;
     }
     HandleGuard guard_event_front(event_front);
     HANDLE event_back = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     if (!event_back) {
-        // catastrophic error
-        throwException(Error::Failed);
+        signalError(op.event_handler, Error::SystemError, {});
+        return;
     }
     HandleGuard guard_event_back(event_back);
 
@@ -476,8 +476,8 @@ void OperationScheduler::doVerify(OperationState& op) {
             ++result.bad;
             break;
         case HashResult::Error:
-            // @todo
-            break;
+            signalError(op.event_handler, Error::FileIO, u8"File Read Error");
+            return;
         case HashResult::Missing:
             ++result.missing;
             break;
