@@ -292,23 +292,13 @@ public:
 
 } // anonymous namespace
 
-OperationScheduler::HashResult OperationScheduler::hashFile(OperationState& op, ChecksumFile::Entry const& f, std::span<HashReadState, 2> read_states) {
+OperationScheduler::HashResult OperationScheduler::hashFile(EventHandler* event_handler, Hasher& hasher,
+                                                            HANDLE fin, std::span<HashReadState, 2> read_states) {
     auto const offsetLow = [](int64_t i) -> DWORD { return static_cast<DWORD>(i & 0xffffffffull); };
     auto const offsetHigh = [](int64_t i) -> DWORD { return static_cast<DWORD>((i >> 32ull) & 0xffffffffull); };
 
     SlidingWindow<std::chrono::nanoseconds, 10> bandwidth_track;
-    op.hasher->reset();
-
-    std::u16string const file_path = resolvePath(op.checksum_path, f.path);
-    HANDLE fin = CreateFile(toWcharStr(file_path), GENERIC_READ, FILE_SHARE_READ, nullptr,
-                            OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED,
-                            nullptr);
-    if (fin == INVALID_HANDLE_VALUE) {
-        // file missing
-        signalFileCompleted(op.event_handler, f.path, Digest{}, convertToUtf8(file_path), EventHandler::CompletionStatus::Missing);
-        return HashResult::Missing;
-    }
-    HandleGuard guard_fin(fin);
+    hasher.reset();
 
     int64_t read_offset = 0;
     int64_t bytes_hashed = 0;
@@ -398,13 +388,13 @@ OperationScheduler::HashResult OperationScheduler::hashFile(OperationState& op, 
             return HashResult::Error;
         }
 
-        op.hasher->addData(std::span<char const>(read_states[front].buffer.data(), bytes_read));
+        hasher.addData(std::span<char const>(read_states[front].buffer.data(), bytes_read));
         bytes_hashed += bytes_read;
         uint32_t current_progress = static_cast<uint32_t>(bytes_hashed * 100 / file_size);
         if (current_progress != last_progress) {
             int64_t const t_avg = bandwidth_track.rollingAverage().count();
             uint32_t const bandwidth_mib_s = static_cast<uint32_t>((t_avg) ? ((static_cast<int64_t>(HASH_FILE_BUFFER_SIZE) * 1'000'000'000ll) / (t_avg * 1'048'576ll)) : 0);
-            signalProgress(op.event_handler, f.path, current_progress, bandwidth_mib_s);
+            signalProgress(event_handler, current_progress, bandwidth_mib_s);
             last_progress = current_progress;
         }
 
@@ -414,20 +404,13 @@ OperationScheduler::HashResult OperationScheduler::hashFile(OperationState& op, 
         if (rs.pending) { WaitForSingleObject(rs.event, INFINITE); DWORD b; GetOverlappedResult(fin, &rs.overlapped, &b, TRUE); }
     }
     if (is_canceled) {
-        signalCanceled(op.event_handler);
+        signalCanceled(event_handler);
         return HashResult::Canceled;
     }
     if (is_error) {
         return HashResult::Error;
     }
-    auto const digest = op.hasher->finalize();
-    if (digest == f.digest) {
-        signalFileCompleted(op.event_handler, f.path, std::move(digest), convertToUtf8(file_path), EventHandler::CompletionStatus::Ok);
-        return HashResult::Ok;
-    } else {
-        signalFileCompleted(op.event_handler, f.path, std::move(digest), convertToUtf8(file_path), EventHandler::CompletionStatus::Bad);
-        return HashResult::Bad;
-    }
+    return HashResult::DigestReady;
 }
 
 void OperationScheduler::doVerify(OperationState& op) {
@@ -468,20 +451,35 @@ void OperationScheduler::doVerify(OperationState& op) {
     };
 
     for (auto const& f : op.checksum_file.getEntries()) {
-        switch (hashFile(op, f, read_states)) {
-        case HashResult::Ok:
-            ++result.ok;
-            break;
-        case HashResult::Bad:
-            ++result.bad;
-            break;
-        case HashResult::Error:
+        std::u16string const absolute_file_path = resolvePath(op.checksum_path, f.path);
+        std::u8string const utf8_absolute_file_path = convertToUtf8(absolute_file_path);
+        HANDLE fin = CreateFile(toWcharStr(absolute_file_path), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                                OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED, nullptr);
+        if (fin == INVALID_HANDLE_VALUE) {
+            signalFileStarted(op.event_handler, f.path, utf8_absolute_file_path);
+            signalFileCompleted(op.event_handler, f.path, Digest{}, utf8_absolute_file_path, EventHandler::CompletionStatus::Missing);
+            ++result.missing;
+            continue;
+        }
+        HandleGuard guard_fin(fin);
+        signalFileStarted(op.event_handler, f.path, utf8_absolute_file_path);
+        HashResult const res = hashFile(op.event_handler, *op.hasher, fin, read_states);
+        if (res == HashResult::DigestReady) {
+            auto const digest = op.hasher->finalize();
+            if (digest == f.digest) {
+                signalFileCompleted(op.event_handler, f.path, std::move(digest), utf8_absolute_file_path, EventHandler::CompletionStatus::Ok);
+                ++result.ok;
+            } else {
+                signalFileCompleted(op.event_handler, f.path, std::move(digest), utf8_absolute_file_path, EventHandler::CompletionStatus::Bad);
+                ++result.bad;
+            }
+        } else if (res == HashResult::Missing) {
+            signalFileCompleted(op.event_handler, f.path, Digest{}, utf8_absolute_file_path, EventHandler::CompletionStatus::Missing);
+            ++result.missing;
+        } else if (res == HashResult::Error) {
             signalError(op.event_handler, Error::FileIO, u8"File Read Error");
             return;
-        case HashResult::Missing:
-            ++result.missing;
-            break;
-        case HashResult::Canceled:
+        } else if (res == HashResult::Canceled) {
             break;
         }
     }
@@ -503,34 +501,45 @@ void OperationScheduler::signalCheckStarted(EventHandler* recipient, uint32_t n_
         .event = Event::ECheckStarted {
             .n_files = n_files
         }
-        });
+    });
 }
 
-void OperationScheduler::signalProgress(EventHandler* recipient, std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s) {
+void OperationScheduler::signalFileStarted(EventHandler* recipient, std::u8string file, std::u8string absolute_file_path) {
+    std::scoped_lock lk(m_mtxEvents);
+    m_eventsQueue.emplace_back(Event{
+        .recipient = recipient,
+        .event = Event::EFileStarted {
+            .file = std::move(file),
+            .absolute_file_path = std::move(absolute_file_path),
+        }
+    });
+    PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
+}
+
+void OperationScheduler::signalProgress(EventHandler* recipient, uint32_t percentage, uint32_t bandwidth_mib_s) {
     std::scoped_lock lk(m_mtxEvents);
     m_eventsQueue.emplace_back(Event{
         .recipient = recipient,
         .event = Event::EProgress {
-            .file = std::u8string(file),
             .percentage = percentage,
             .bandwidth_mib_s = bandwidth_mib_s
         }
-        });
+    });
     PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
 }
 
-void OperationScheduler::signalFileCompleted(EventHandler* recipient, std::u8string_view file, Digest checksum,
-    std::u8string absolute_file_path, EventHandler::CompletionStatus status) {
+void OperationScheduler::signalFileCompleted(EventHandler* recipient, std::u8string file, Digest checksum,
+                                             std::u8string absolute_file_path, EventHandler::CompletionStatus status) {
     std::scoped_lock lk(m_mtxEvents);
     m_eventsQueue.emplace_back(Event{
         .recipient = recipient,
         .event = Event::EFileCompleted {
-            .file = std::u8string(file),
+            .file = std::move(file),
             .checksum = std::move(checksum),
             .absolute_file_path = std::move(absolute_file_path),
             .status = status,
         }
-        });
+    });
     PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
 }
 
@@ -541,7 +550,7 @@ void OperationScheduler::signalCheckCompleted(EventHandler* recipient, EventHand
         .event = Event::ECheckCompleted {
             .r = r
         }
-        });
+    });
     PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
 }
 
@@ -551,7 +560,7 @@ void OperationScheduler::signalCancelRequested(EventHandler* recipient) {
         .recipient = recipient,
         .event = Event::ECancelRequested {
         }
-        });
+    });
     PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
 }
 
@@ -561,7 +570,7 @@ void OperationScheduler::signalCanceled(EventHandler* recipient) {
         .recipient = recipient,
         .event = Event::ECanceled {
         }
-        });
+    });
     PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
 }
 
@@ -573,7 +582,7 @@ void OperationScheduler::signalError(EventHandler* recipient, quicker_sfv::Error
             .error = error,
             .msg = std::u8string(msg)
         }
-        });
+    });
     PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
 }
 
@@ -581,8 +590,12 @@ void OperationScheduler::dispatchEvent(EventHandler* recipient, Event::ECheckSta
     recipient->onCheckStarted(e.n_files);
 }
 
+void OperationScheduler::dispatchEvent(EventHandler* recipient, Event::EFileStarted const& e) {
+    recipient->onFileStarted(e.file, e.absolute_file_path);
+}
+
 void OperationScheduler::dispatchEvent(EventHandler* recipient, Event::EProgress const& e) {
-    recipient->onProgress(e.file, e.percentage, e.bandwidth_mib_s);
+    recipient->onProgress(e.percentage, e.bandwidth_mib_s);
 }
 
 void OperationScheduler::dispatchEvent(EventHandler* recipient, Event::EFileCompleted const& e) {

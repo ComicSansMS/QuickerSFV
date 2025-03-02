@@ -176,7 +176,8 @@ public:
     HasherOptions getOptions() const;
 
     void onCheckStarted(uint32_t n_files) override;
-    void onProgress(std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s) override;
+    void onFileStarted(std::u8string_view file, std::u8string_view absolute_file_path) override;
+    void onProgress(uint32_t percentage, uint32_t bandwidth_mib_s) override;
     void onFileCompleted(std::u8string_view file, Digest const& checksum, std::u8string_view absolute_file_path, CompletionStatus status) override;
     void onCheckCompleted(Result r) override;
     void onCancelRequested() override;
@@ -826,8 +827,12 @@ void MainWindow::onCheckStarted(uint32_t n_files) {
     UpdateStats();
 }
 
-void MainWindow::onProgress(std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s) {
+void MainWindow::onFileStarted(std::u8string_view file, std::u8string_view absolute_file_path) {
     UNREFERENCED_PARAMETER(file);
+    UNREFERENCED_PARAMETER(absolute_file_path);
+}
+
+void MainWindow::onProgress(uint32_t percentage, uint32_t bandwidth_mib_s) {
     m_stats.progress = percentage;
     m_stats.bandwidth = bandwidth_mib_s;
     UpdateStats();

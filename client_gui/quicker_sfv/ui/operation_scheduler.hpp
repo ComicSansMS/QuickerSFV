@@ -70,8 +70,11 @@ private:
         struct ECheckStarted {
             uint32_t n_files;
         };
-        struct EProgress {
+        struct EFileStarted {
             std::u8string file;
+            std::u8string absolute_file_path;
+        };
+        struct EProgress {
             uint32_t percentage;
             uint32_t bandwidth_mib_s;
         };
@@ -93,7 +96,7 @@ private:
             std::u8string msg;
         };
         EventHandler* recipient;
-        std::variant<ECheckStarted, EProgress, EFileCompleted, ECheckCompleted, ECancelRequested, ECanceled, EError> event;
+        std::variant<ECheckStarted, EFileStarted, EProgress, EFileCompleted, ECheckCompleted, ECancelRequested, ECanceled, EError> event;
     };
     std::vector<Event> m_eventsQueue;
     std::mutex m_mtxEvents;
@@ -115,8 +118,7 @@ private:
     void doVerify(OperationState& op);
     void doCreate(OperationState& op);
     enum class HashResult {
-        Ok,
-        Bad,
+        DigestReady,
         Missing,
         Canceled,
         Error,
@@ -128,11 +130,13 @@ private:
         bool pending;
         std::chrono::steady_clock::time_point t;
     };
-    HashResult hashFile(OperationState& op, ChecksumFile::Entry const& f, std::span<HashReadState, 2> read_states);
+    HashResult hashFile(EventHandler* event_handler, Hasher& hasher,
+                        HANDLE fin, std::span<HashReadState, 2> read_states);
 
     void signalCheckStarted(EventHandler* recipient, uint32_t n_files);
-    void signalProgress(EventHandler* recipient, std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s);
-    void signalFileCompleted(EventHandler* recipient, std::u8string_view file, Digest checksum,
+    void signalFileStarted(EventHandler* recipient, std::u8string file, std::u8string absolute_file_path);
+    void signalProgress(EventHandler* recipient, uint32_t percentage, uint32_t bandwidth_mib_s);
+    void signalFileCompleted(EventHandler* recipient, std::u8string file, Digest checksum,
         std::u8string absolute_file_path, EventHandler::CompletionStatus status);
     void signalCheckCompleted(EventHandler* recipient, EventHandler::Result r);
     void signalCancelRequested(EventHandler* recipient);
@@ -140,6 +144,7 @@ private:
     void signalError(EventHandler* recipient, Error error, std::u8string_view msg);
 
     static void dispatchEvent(EventHandler* recipient, Event::ECheckStarted const& e);
+    static void dispatchEvent(EventHandler* recipient, Event::EFileStarted const& e);
     static void dispatchEvent(EventHandler* recipient, Event::EProgress const& e);
     static void dispatchEvent(EventHandler* recipient, Event::EFileCompleted const& e);
     static void dispatchEvent(EventHandler* recipient, Event::ECheckCompleted const& e);

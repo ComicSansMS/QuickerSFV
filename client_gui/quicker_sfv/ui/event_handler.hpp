@@ -25,7 +25,8 @@ struct EventHandler {
     };
 
     virtual void onCheckStarted(uint32_t n_files) = 0;
-    virtual void onProgress(std::u8string_view file, uint32_t percentage, uint32_t bandwidth_mib_s) = 0;
+    virtual void onFileStarted(std::u8string_view file, std::u8string_view absolute_file_path) = 0;
+    virtual void onProgress(uint32_t percentage, uint32_t bandwidth_mib_s) = 0;
     virtual void onFileCompleted(std::u8string_view file, Digest const& checksum, std::u8string_view absolute_file_path,
         CompletionStatus status) = 0;
     virtual void onCheckCompleted(Result r) = 0;
