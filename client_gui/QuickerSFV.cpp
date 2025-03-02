@@ -898,7 +898,7 @@ void MainWindow::onCanceled() {
 
 void MainWindow::onError(quicker_sfv::Error error, std::u8string_view msg) {
     UNREFERENCED_PARAMETER(error);
-    addListEntry(formatString(255, TEXT("ERROR: %s (%d)"), convertToUtf16(msg).c_str(), static_cast<int>(error)));
+    addListEntry(formatString(255, TEXT("ERROR: %s (%d)"), convertToUtf16(msg).c_str(), static_cast<int>(error)), {}, ListViewEntry::MessageBad);
 }
 
 void MainWindow::UpdateStats() {

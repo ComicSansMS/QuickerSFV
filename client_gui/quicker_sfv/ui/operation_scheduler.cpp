@@ -83,6 +83,10 @@ struct FileInfo {
     uint64_t size;
 };
 
+struct IterateException : std::exception {
+    ~IterateException() override = default;
+};
+
 std::generator<FileInfo> iterateFiles(std::u16string const& base_path) {
     auto const is_dot = [](LPCWSTR p) -> bool { return p[0] == L'.' && p[1] == L'\0'; };
     auto const is_dotdot = [](LPCWSTR p) -> bool { return p[0] == L'.' && p[1] == L'.' && p[2] == L'\0'; };
@@ -90,14 +94,14 @@ std::generator<FileInfo> iterateFiles(std::u16string const& base_path) {
         if (!str.empty() && str.back() == u'*') { str.pop_back(); }
         if (!str.empty() && str.back() == u'\\') { str.pop_back(); }
         str.append(u"\\*");
-        };
+    };
     auto const relativePathTo = [](std::u16string_view p, std::u16string_view parent_path) -> std::u16string {
         std::u16string ret{ p };
         auto it = std::mismatch(ret.begin(), ret.end(), parent_path.begin(), parent_path.end());
         if (it.first != ret.end() && (*(it.first) == u'\\')) { ++it.first; }
         ret.erase(ret.begin(), it.first);
         return ret;
-        };
+    };
     std::vector<std::u16string> directories;
     directories.emplace_back(base_path);
     appendWildcard(directories.back());
@@ -108,12 +112,12 @@ std::generator<FileInfo> iterateFiles(std::u16string const& base_path) {
         HANDLE hsearch = FindFirstFileEx(toWcharStr(current_path), FindExInfoBasic, &find_data,
             FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH);
         if (hsearch == INVALID_HANDLE_VALUE) {
-            MessageBox(nullptr, TEXT("Unable to open file for finding"), TEXT("Error"), MB_ICONERROR);
+            throw IterateException{};
         }
         do {
             if (is_dot(find_data.cFileName) || is_dotdot(find_data.cFileName)) { continue; }
             std::u16string p = current_path;
-            p.pop_back();   // pop wildcard
+            p.pop_back();   // pop '*' wildcard
             p.append(assumeUtf16(find_data.cFileName));
             uint64_t filesize = (static_cast<uint64_t>(find_data.nFileSizeHigh) << 32ull) | static_cast<uint64_t>(find_data.nFileSizeLow);
             if ((find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
@@ -123,32 +127,13 @@ std::generator<FileInfo> iterateFiles(std::u16string const& base_path) {
                 co_yield FileInfo{ .absolute_path = toWcharStr(p), .relative_path = relativePathTo(p, base_path), .size = filesize };
             }
         } while (FindNextFile(hsearch, &find_data) != FALSE);
-        bool success = (GetLastError() == ERROR_NO_MORE_FILES);
+        if (GetLastError() != ERROR_NO_MORE_FILES) {
+            throw IterateException{};
+        }
         FindClose(hsearch);
     }
 }
 
-Digest hashFile_old(Hasher& hasher, LPCWSTR filepath, uint64_t filesize) {
-    hasher.reset();
-    HANDLE hin = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
-    if (hin == INVALID_HANDLE_VALUE) {
-        std::abort();
-    }
-    HANDLE hmappedFile = CreateFileMapping(hin, nullptr, PAGE_READONLY, 0, 0, nullptr);
-    if (!hmappedFile) {
-        std::abort();
-    }
-    LPVOID fptr = MapViewOfFile(hmappedFile, FILE_MAP_READ, 0, 0, 0);
-    if (!fptr) {
-        std::abort();
-    }
-    std::span<char const> filespan{ reinterpret_cast<char const*>(fptr), (size_t)filesize };
-    hasher.addData(filespan);
-    UnmapViewOfFile(fptr);
-    CloseHandle(hmappedFile);
-    CloseHandle(hin);
-    return hasher.finalize();
-}
 } // anonymous namespace
 
 
@@ -404,7 +389,6 @@ OperationScheduler::HashResult OperationScheduler::hashFile(EventHandler* event_
         if (rs.pending) { WaitForSingleObject(rs.event, INFINITE); DWORD b; GetOverlappedResult(fin, &rs.overlapped, &b, TRUE); }
     }
     if (is_canceled) {
-        signalCanceled(event_handler);
         return HashResult::Canceled;
     }
     if (is_error) {
@@ -416,9 +400,6 @@ OperationScheduler::HashResult OperationScheduler::hashFile(EventHandler* event_
 void OperationScheduler::doVerify(OperationState& op) {
     FileInputWin32 reader(op.checksum_path);
     op.checksum_file = op.checksum_provider->readFromFile(reader);
-    EventHandler::Result result{};
-    result.total = static_cast<uint32_t>(op.checksum_file.getEntries().size());
-    signalCheckStarted(op.event_handler, result.total);
 
     HANDLE event_front = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     if (!event_front) {
@@ -450,19 +431,22 @@ void OperationScheduler::doVerify(OperationState& op) {
         },
     };
 
+    EventHandler::Result result{};
+    result.total = static_cast<uint32_t>(op.checksum_file.getEntries().size());
+    signalCheckStarted(op.event_handler, result.total);
+
     for (auto const& f : op.checksum_file.getEntries()) {
         std::u16string const absolute_file_path = resolvePath(op.checksum_path, f.path);
         std::u8string const utf8_absolute_file_path = convertToUtf8(absolute_file_path);
+        signalFileStarted(op.event_handler, f.path, utf8_absolute_file_path);
         HANDLE fin = CreateFile(toWcharStr(absolute_file_path), GENERIC_READ, FILE_SHARE_READ, nullptr,
                                 OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED, nullptr);
         if (fin == INVALID_HANDLE_VALUE) {
-            signalFileStarted(op.event_handler, f.path, utf8_absolute_file_path);
             signalFileCompleted(op.event_handler, f.path, Digest{}, utf8_absolute_file_path, EventHandler::CompletionStatus::Missing);
             ++result.missing;
             continue;
         }
         HandleGuard guard_fin(fin);
-        signalFileStarted(op.event_handler, f.path, utf8_absolute_file_path);
         HashResult const res = hashFile(op.event_handler, *op.hasher, fin, read_states);
         if (res == HashResult::DigestReady) {
             auto const digest = op.hasher->finalize();
@@ -480,6 +464,7 @@ void OperationScheduler::doVerify(OperationState& op) {
             signalError(op.event_handler, Error::FileIO, u8"File Read Error");
             return;
         } else if (res == HashResult::Canceled) {
+            signalCanceled(op.event_handler);
             break;
         }
     }
@@ -487,11 +472,71 @@ void OperationScheduler::doVerify(OperationState& op) {
 }
 
 void OperationScheduler::doCreate(OperationState& op) {
-    for (auto const& [abs, rel, size] : iterateFiles(op.folder_path)) {
-        op.checksum_file.addEntry(convertToUtf8(rel), hashFile_old(*op.hasher, abs, size));
+    HANDLE event_front = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    if (!event_front) {
+        signalError(op.event_handler, Error::SystemError, {});
+        return;
     }
-    FileOutputWin32 writer(op.checksum_path);
-    op.checksum_provider->serialize(writer, op.checksum_file);
+    HandleGuard guard_event_front(event_front);
+    HANDLE event_back = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    if (!event_back) {
+        signalError(op.event_handler, Error::SystemError, {});
+        return;
+    }
+    HandleGuard guard_event_back(event_back);
+
+    HashReadState read_states[] = {
+        HashReadState{
+            .buffer = std::vector<char>(HASH_FILE_BUFFER_SIZE),
+            .event = event_front,
+            .overlapped = {},
+            .pending = false,
+            .t = {}
+        },
+        HashReadState{
+            .buffer = std::vector<char>(HASH_FILE_BUFFER_SIZE),
+            .event = event_back,
+            .overlapped = {},
+            .pending = false,
+            .t = {}
+        },
+    };
+
+    signalCheckStarted(op.event_handler, 0);
+    try {
+        EventHandler::Result result = {};
+        for (auto const& [absolute_path, relative_path, size] : iterateFiles(op.folder_path)) {
+            std::u8string const utf8_relative_path = convertToUtf8(relative_path);
+            std::u8string const utf8_absolute_path = convertToUtf8(assumeUtf16(absolute_path));
+            signalFileStarted(op.event_handler, utf8_relative_path, utf8_absolute_path);
+            HANDLE fin = CreateFile(absolute_path, GENERIC_READ, FILE_SHARE_READ, nullptr,
+                                    OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED, nullptr);
+            if (fin == INVALID_HANDLE_VALUE) {
+                signalFileCompleted(op.event_handler, utf8_relative_path, Digest{}, utf8_absolute_path, EventHandler::CompletionStatus::Bad);
+                continue;
+            }
+            HandleGuard guard_fin(fin);
+            HashResult const res = hashFile(op.event_handler, *op.hasher, fin, read_states);
+            if (res == HashResult::DigestReady) {
+                Digest const d = op.hasher->finalize();
+                op.checksum_file.addEntry(utf8_relative_path, op.hasher->finalize());
+                signalFileCompleted(op.event_handler, utf8_relative_path, d, utf8_absolute_path, EventHandler::CompletionStatus::Ok);
+                ++result.ok;
+            } else if ((res == HashResult::Missing) || (res == HashResult::Error)) {
+                signalFileCompleted(op.event_handler, utf8_relative_path, {}, utf8_absolute_path, EventHandler::CompletionStatus::Bad);
+                ++result.bad;
+            } else if (res == HashResult::Canceled) {
+                signalCanceled(op.event_handler);
+                return;
+            }
+            ++result.total;
+        }
+        FileOutputWin32 writer(op.checksum_path);
+        op.checksum_provider->serialize(writer, op.checksum_file);
+        signalCheckCompleted(op.event_handler, result);
+    } catch (...) {
+        signalError(op.event_handler, Error::SystemError, {});
+    }
 }
 
 void OperationScheduler::signalCheckStarted(EventHandler* recipient, uint32_t n_files) {
