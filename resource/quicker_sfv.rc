@@ -170,7 +170,7 @@ STYLE DS_SETFONT | DS_FIXEDSYS | WS_POPUP | WS_CAPTION
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     DEFPUSHBUTTON   "OK",IDOK,186,168,50,14
-    LTEXT           "H",IDC_STATIC_HEADER_TEXT,46,7,151,19
+    LTEXT           "H",IDC_STATIC_HEADER_TEXT,46,7,190,19
     LTEXT           "Inspired by QuickSFV, written by Mercedes.\n©️ 1999-2004 Totally Useless Software, Inc.",IDC_STATIC,18,84,216,18
     LTEXT           "MD5 algorithm from OpenSSL:\nCopyright 1995-2020 The OpenSSL Project Authors.",IDC_STATIC,18,108,216,24
     LTEXT           "CRC32 algorithm from Chromium and zlib:\nCopyright 2017 The Chromium Authors\nCopyright (C) 1995-2022 Jean-loup Gailly and Mark Adler",IDC_STATIC,18,132,216,30

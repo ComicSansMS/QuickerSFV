@@ -929,7 +929,10 @@ void MainWindow::writeResultsToFile() const {
     }
     for (auto const& e : m_listEntries) {
         std::u8string msg;
-        if ((e.status == ListViewEntry::Status::Ok) || (e.status == ListViewEntry::Status::FailedMissing) || (e.status == ListViewEntry::Status::FailedMismatch)) {
+        if ((e.status == ListViewEntry::Status::Ok) ||
+            (e.status == ListViewEntry::Status::FailedMissing) ||
+            (e.status == ListViewEntry::Status::FailedMismatch))
+        {
             msg = convertToUtf8(e.name) + u8": " +
                 convertToUtf8(e.checksum) + u8":  " +
                 convertToUtf8(assumeUtf16(getStatusTextForStatus(e.status)));
@@ -938,7 +941,7 @@ void MainWindow::writeResultsToFile() const {
         }
         msg.push_back(u8'\r');
         msg.push_back(u8'\n');
-        WriteFile(fout, msg.data(), static_cast<DWORD>(msg.size()), nullptr, nullptr);
+        if (!WriteFile(fout, msg.data(), static_cast<DWORD>(msg.size()), nullptr, nullptr)) { break; }
     }
     CloseHandle(fout);
 }
