@@ -136,13 +136,19 @@ if(MSVC)
         ${PROJECT_SOURCE_DIR}/client_gui/QuickerSFV.cpp
         ${PROJECT_SOURCE_DIR}/client_gui/ui/enforce.cpp
         ${PROJECT_SOURCE_DIR}/client_gui/ui/file_dialog.cpp
+        ${PROJECT_SOURCE_DIR}/client_gui/ui/operation_scheduler.cpp
+        ${PROJECT_SOURCE_DIR}/client_gui/ui/string_helper.cpp
         PRIVATE
         FILE_SET HEADERS
         BASE_DIRS ${PROJECT_SOURCE_DIR}/client_gui
         FILES
         ${PROJECT_SOURCE_DIR}/client_gui/ui/command_line_parser.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/ui/enforce.hpp
+        ${PROJECT_SOURCE_DIR}/client_gui/ui/event_handler.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/ui/file_dialog.hpp
+        ${PROJECT_SOURCE_DIR}/client_gui/ui/operation_scheduler.hpp
+        ${PROJECT_SOURCE_DIR}/client_gui/ui/string_helper.hpp
+        ${PROJECT_SOURCE_DIR}/client_gui/ui/user_messages.hpp
         PRIVATE
         ${PROJECT_BINARY_DIR}/generated/resource/quicker_sfv.rc
         PRIVATE
