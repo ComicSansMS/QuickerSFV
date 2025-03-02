@@ -1,6 +1,6 @@
-#include <ui/file_dialog.hpp>
+#include <quicker_sfv/ui/file_dialog.hpp>
 
-#include <ui/enforce.hpp>
+#include <quicker_sfv/ui/enforce.hpp>
 
 namespace quicker_sfv::gui {
 

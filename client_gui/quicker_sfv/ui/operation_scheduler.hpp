@@ -5,7 +5,7 @@
 #include <quicker_sfv/checksum_provider.hpp>
 #include <quicker_sfv/hasher.hpp>
 
-#include <ui/event_handler.hpp>
+#include <quicker_sfv/ui/event_handler.hpp>
 
 #include <condition_variable>
 #include <mutex>

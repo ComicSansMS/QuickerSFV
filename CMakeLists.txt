@@ -116,6 +116,33 @@ endif()
 
 
 if(MSVC)
+    add_library(quicker_sfv_client_support)
+    target_sources(quicker_sfv_client_support
+        PRIVATE
+        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/enforce.cpp
+        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/file_dialog.cpp
+        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/operation_scheduler.cpp
+        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/string_helper.cpp
+        PUBLIC
+        FILE_SET HEADERS
+        BASE_DIRS ${PROJECT_SOURCE_DIR}/client_gui
+        FILES
+        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/command_line_parser.hpp
+        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/enforce.hpp
+        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/event_handler.hpp
+        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/file_dialog.hpp
+        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/operation_scheduler.hpp
+        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/string_helper.hpp
+        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/user_messages.hpp
+    )
+    target_link_libraries(quicker_sfv_client_support PUBLIC quicker_sfv)
+    target_compile_features(quicker_sfv_client_support PRIVATE cxx_std_23)
+    target_compile_options(quicker_sfv_client_support PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
+        $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -pedantic>
+    )
+    target_compile_definitions(quicker_sfv_client_support PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+
     add_executable(QuickerSFV WIN32)
     configure_file(
         ${PROJECT_SOURCE_DIR}/resource/quicker_sfv.manifest.in
@@ -134,21 +161,6 @@ if(MSVC)
     target_sources(QuickerSFV
         PRIVATE
         ${PROJECT_SOURCE_DIR}/client_gui/QuickerSFV.cpp
-        ${PROJECT_SOURCE_DIR}/client_gui/ui/enforce.cpp
-        ${PROJECT_SOURCE_DIR}/client_gui/ui/file_dialog.cpp
-        ${PROJECT_SOURCE_DIR}/client_gui/ui/operation_scheduler.cpp
-        ${PROJECT_SOURCE_DIR}/client_gui/ui/string_helper.cpp
-        PRIVATE
-        FILE_SET HEADERS
-        BASE_DIRS ${PROJECT_SOURCE_DIR}/client_gui
-        FILES
-        ${PROJECT_SOURCE_DIR}/client_gui/ui/command_line_parser.hpp
-        ${PROJECT_SOURCE_DIR}/client_gui/ui/enforce.hpp
-        ${PROJECT_SOURCE_DIR}/client_gui/ui/event_handler.hpp
-        ${PROJECT_SOURCE_DIR}/client_gui/ui/file_dialog.hpp
-        ${PROJECT_SOURCE_DIR}/client_gui/ui/operation_scheduler.hpp
-        ${PROJECT_SOURCE_DIR}/client_gui/ui/string_helper.hpp
-        ${PROJECT_SOURCE_DIR}/client_gui/ui/user_messages.hpp
         PRIVATE
         ${PROJECT_BINARY_DIR}/generated/resource/quicker_sfv.rc
         PRIVATE
@@ -157,16 +169,13 @@ if(MSVC)
         FILES
         ${PROJECT_BINARY_DIR}/generated/resource/resource.h
     )
-    target_compile_options(QuickerSFV PRIVATE
-      $<$<CXX_COMPILER_ID:MSVC>:/W4>
-    )
     target_compile_features(QuickerSFV PRIVATE cxx_std_23)
     target_compile_options(QuickerSFV PRIVATE
         $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
         $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -pedantic>
     )
     target_compile_definitions(QuickerSFV PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-    target_link_libraries(QuickerSFV PRIVATE UxTheme.lib Comctl32.lib quicker_sfv)
+    target_link_libraries(QuickerSFV PRIVATE UxTheme.lib Comctl32.lib quicker_sfv quicker_sfv_client_support)
     target_link_options(QuickerSFV PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/MANIFEST:NO>)
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT QuickerSFV)
 
@@ -174,18 +183,13 @@ if(MSVC)
         add_executable(quicker_sfv_ui_tests)
         target_sources(quicker_sfv_ui_tests
             PRIVATE
-            FILE_SET HEADERS
-            BASE_DIRS ${PROJECT_SOURCE_DIR}/client_gui
-            FILES
-            ${PROJECT_SOURCE_DIR}/client_gui/ui/command_line_parser.hpp
-            PRIVATE
             ${PROJECT_SOURCE_DIR}/test/ui/win32_command_line_parser.t.cpp
         )
         target_compile_options(quicker_sfv_ui_tests PRIVATE
             $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
             $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -pedantic>
         )
-        target_link_libraries(quicker_sfv_ui_tests PRIVATE quicker_sfv Catch2)
+        target_link_libraries(quicker_sfv_ui_tests PRIVATE quicker_sfv_client_support Catch2)
         add_test(NAME "QuickerSFV UI Unit Tests" COMMAND quicker_sfv_ui_tests)
     endif()
 endif(MSVC)

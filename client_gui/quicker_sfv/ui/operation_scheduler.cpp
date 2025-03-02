@@ -1,7 +1,7 @@
-#include <ui/operation_scheduler.hpp>
+#include <quicker_sfv/ui/operation_scheduler.hpp>
 
-#include <ui/string_helper.hpp>
-#include <ui/user_messages.hpp>
+#include <quicker_sfv/ui/string_helper.hpp>
+#include <quicker_sfv/ui/user_messages.hpp>
 
 #include <quicker_sfv/utf.hpp>
 

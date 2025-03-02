@@ -17,13 +17,13 @@
 */
 #include <quicker_sfv/quicker_sfv.hpp>
 
-#include <ui/command_line_parser.hpp>
-#include <ui/enforce.hpp>
-#include <ui/event_handler.hpp>
-#include <ui/file_dialog.hpp>
-#include <ui/operation_scheduler.hpp>
-#include <ui/string_helper.hpp>
-#include <ui/user_messages.hpp>
+#include <quicker_sfv/ui/command_line_parser.hpp>
+#include <quicker_sfv/ui/enforce.hpp>
+#include <quicker_sfv/ui/event_handler.hpp>
+#include <quicker_sfv/ui/file_dialog.hpp>
+#include <quicker_sfv/ui/operation_scheduler.hpp>
+#include <quicker_sfv/ui/string_helper.hpp>
+#include <quicker_sfv/ui/user_messages.hpp>
 
 #include <Windows.h>
 #include <windowsx.h>
