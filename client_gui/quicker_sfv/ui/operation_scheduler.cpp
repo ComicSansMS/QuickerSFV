@@ -373,7 +373,7 @@ OperationScheduler::HashResult OperationScheduler::hashFile(EventHandler* event_
             return HashResult::Error;
         }
 
-        hasher.addData(std::span<char const>(read_states[front].buffer.data(), bytes_read));
+        hasher.addData(std::span<std::byte const>(read_states[front].buffer.data(), bytes_read));
         bytes_hashed += bytes_read;
         uint32_t current_progress = static_cast<uint32_t>(bytes_hashed * 100 / file_size);
         if (current_progress != last_progress) {
@@ -416,14 +416,14 @@ void OperationScheduler::doVerify(OperationState& op) {
 
     HashReadState read_states[] = {
         HashReadState{
-            .buffer = std::vector<char>(HASH_FILE_BUFFER_SIZE),
+            .buffer = std::vector<std::byte>(HASH_FILE_BUFFER_SIZE),
             .event = event_front,
             .overlapped = {},
             .pending = false,
             .t = {}
         },
         HashReadState{
-            .buffer = std::vector<char>(HASH_FILE_BUFFER_SIZE),
+            .buffer = std::vector<std::byte>(HASH_FILE_BUFFER_SIZE),
             .event = event_back,
             .overlapped = {},
             .pending = false,
@@ -487,14 +487,14 @@ void OperationScheduler::doCreate(OperationState& op) {
 
     HashReadState read_states[] = {
         HashReadState{
-            .buffer = std::vector<char>(HASH_FILE_BUFFER_SIZE),
+            .buffer = std::vector<std::byte>(HASH_FILE_BUFFER_SIZE),
             .event = event_front,
             .overlapped = {},
             .pending = false,
             .t = {}
         },
         HashReadState{
-            .buffer = std::vector<char>(HASH_FILE_BUFFER_SIZE),
+            .buffer = std::vector<std::byte>(HASH_FILE_BUFFER_SIZE),
             .event = event_back,
             .overlapped = {},
             .pending = false,

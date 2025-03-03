@@ -13,7 +13,7 @@ class Hasher {
 public:
     virtual ~Hasher() = 0;
     Hasher& operator=(Hasher&&) = delete;
-    virtual void addData(std::span<char const> data) = 0;
+    virtual void addData(std::span<std::byte const> data) = 0;
     virtual Digest finalize() = 0;
     virtual void reset() = 0;
 };

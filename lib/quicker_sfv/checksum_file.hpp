@@ -17,6 +17,7 @@ public:
         std::u8string path;
         Digest digest;
     };
+private:
     std::vector<Entry> m_entries;
 public:
     [[nodiscard]] std::span<const Entry> getEntries() const;

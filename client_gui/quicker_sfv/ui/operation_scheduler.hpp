@@ -124,7 +124,7 @@ private:
         Error,
     };
     struct HashReadState {
-        std::vector<char> buffer;
+        std::vector<std::byte> buffer;
         HANDLE event;
         OVERLAPPED overlapped;
         bool pending;

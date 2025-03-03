@@ -55,8 +55,8 @@ Crc32Hasher::Crc32Hasher(Crc32UseAvx512_T)
 
 Crc32Hasher::~Crc32Hasher() = default;
 
-void Crc32Hasher::addData(std::span<char const> data) {
-    m_state = crc::crc32(data.data(), data.size(), m_state, m_useAvx512);
+void Crc32Hasher::addData(std::span<std::byte const> data) {
+    m_state = crc::crc32(reinterpret_cast<char const*>(data.data()), data.size(), m_state, m_useAvx512);
 }
 
 Digest Crc32Hasher::finalize() {

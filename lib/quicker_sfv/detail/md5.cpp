@@ -76,7 +76,7 @@ MD5Hasher::MD5Hasher()
 
 MD5Hasher::~MD5Hasher() = default;
 
-void MD5Hasher::addData(std::span<char const> data)
+void MD5Hasher::addData(std::span<std::byte const> data)
 {
     SUPPRESS_DEPRECATED_WARNING();
     int res = MD5_Update(&m_impl->context, data.data(), data.size());

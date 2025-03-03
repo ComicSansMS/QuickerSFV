@@ -17,7 +17,7 @@ public:
     Crc32Hasher();
     explicit Crc32Hasher(Crc32UseAvx512_T);
     ~Crc32Hasher() override;
-    void addData(std::span<char const> data) override;
+    void addData(std::span<std::byte const> data) override;
     Digest finalize() override;
     void reset() override;
     static Digest digestFromString(std::u8string_view str);
