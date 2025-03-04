@@ -34,13 +34,13 @@ std::u16string formatString(size_t buffer_size, LPCTSTR format, ...) {
 }
 
 
-std::u16string extractBasePathFromChecksumFilePath(std::u16string_view checksum_file_path) {
+std::u16string extractBasePathFromFilePath(std::u16string_view checksum_file_path) {
     auto it_slash = std::find(checksum_file_path.rbegin(), checksum_file_path.rend(), u'\\').base();
     return std::u16string{ checksum_file_path.substr(0, std::distance(checksum_file_path.begin(), it_slash)) };
 }
 
 std::u16string resolvePath(std::u16string_view checksum_file_path, std::u8string_view relative_path) {
-    std::u16string const file_path = extractBasePathFromChecksumFilePath(checksum_file_path) + convertToUtf16(relative_path);
+    std::u16string const file_path = extractBasePathFromFilePath(checksum_file_path) + convertToUtf16(relative_path);
     wchar_t empty;
     DWORD const required_size = GetFullPathName(toWcharStr(file_path), 0, &empty, nullptr);
     wchar_t* buffer = new wchar_t[required_size];

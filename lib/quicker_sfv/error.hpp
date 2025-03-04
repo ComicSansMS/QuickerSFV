@@ -11,6 +11,7 @@ enum class Error {
     FileIO          = 5,
     HasherFailure   = 10,
     ParserError     = 11,
+    PluginError     = 12,
 };
 
 [[noreturn]] void throwException(Error e);

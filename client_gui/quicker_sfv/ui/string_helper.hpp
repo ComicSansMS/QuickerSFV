@@ -18,7 +18,7 @@ inline LPCWSTR toWcharStr(std::u16string const& u16str) {
 LPCTSTR formatString(LPTSTR out_buffer, size_t buffer_size, LPCTSTR format, ...);
 std::u16string formatString(size_t buffer_size, LPCTSTR format, ...);
 
-std::u16string extractBasePathFromChecksumFilePath(std::u16string_view checksum_file_path);
+std::u16string extractBasePathFromFilePath(std::u16string_view checksum_file_path);
 std::u16string resolvePath(std::u16string_view checksum_file_path, std::u8string_view relative_path);
 
 }

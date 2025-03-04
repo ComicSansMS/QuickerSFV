@@ -25,6 +25,8 @@
 #include <quicker_sfv/ui/string_helper.hpp>
 #include <quicker_sfv/ui/user_messages.hpp>
 
+#include <quicker_sfv/plugin/plugin_sdk.h>
+
 #include <Windows.h>
 #include <windowsx.h>
 #include <atlbase.h>
@@ -60,10 +62,8 @@ private:
 public:
     FileProviders()
     {
-        m_providers.emplace_back(quicker_sfv::createSfvProvider());
-        registerFileType(*m_providers.back());
-        m_providers.emplace_back(quicker_sfv::createMD5Provider());
-        registerFileType(*m_providers.back());
+        addProvider(quicker_sfv::createSfvProvider());
+        addProvider(quicker_sfv::createMD5Provider());
         // @todo:
         //  - .ckz
         //  - .par
@@ -102,9 +102,40 @@ public:
         }
         return nullptr;
     }
+
+    std::u16string getExeDirectory() {
+        char* exe_file_path = nullptr;
+        if (_get_pgmptr(&exe_file_path) != 0) { return {}; }
+        return extractBasePathFromFilePath(convertToUtf16(assumeUtf8(exe_file_path)));
+    }
+
+    void loadPlugins() {
+        WIN32_FIND_DATA find_data;
+        std::u16string search_path = getExeDirectory();
+        if (search_path.empty()) { return; }
+        search_path.append(u"*.dll");
+        HANDLE hsearch = FindFirstFile(toWcharStr(search_path), &find_data);
+        if (hsearch == INVALID_HANDLE_VALUE) {
+            return;
+        }
+        do {
+            HMODULE hmod = LoadLibrary(find_data.cFileName);
+            if (hmod) {
+                QuickerSFV_LoadPluginFunc loader = (QuickerSFV_LoadPluginFunc)GetProcAddress(hmod, "QuickerSFV_LoadPlugin");
+                if (loader) {
+                    ChecksumProviderPtr p = quicker_sfv::loadPlugin(loader);
+                    if (p) {
+                        addProvider(std::move(p));
+                    }
+                }
+            }
+        } while (FindNextFile(hsearch, &find_data) != FALSE);
+    }
+
 private:
-    void registerFileType(ChecksumProvider const& provider) {
-        m_fileTypes.emplace_back(std::u8string(provider.fileExtensions()), std::u8string(provider.fileDescription()));
+    void addProvider(ChecksumProviderPtr&& p) {
+        m_fileTypes.emplace_back(std::u8string(p->fileExtensions()), std::u8string(p->fileDescription()));
+        m_providers.emplace_back(std::move(p));
     }
 };
 
@@ -985,6 +1016,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
     bool const no_gui_window = !command_line_opts.outFile.empty();
 
     FileProviders file_providers;
+    file_providers.loadPlugins();
 
     if (!no_gui_window) {
         INITCOMMONCONTROLSEX init_cc_ex{
