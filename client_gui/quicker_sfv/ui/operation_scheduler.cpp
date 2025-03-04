@@ -375,7 +375,7 @@ OperationScheduler::HashResult OperationScheduler::hashFile(EventHandler* event_
 
         hasher.addData(std::span<std::byte const>(read_states[front].buffer.data(), bytes_read));
         bytes_hashed += bytes_read;
-        uint32_t current_progress = static_cast<uint32_t>(bytes_hashed * 100 / file_size);
+        uint32_t current_progress = (file_size == 0) ? 0u : static_cast<uint32_t>(bytes_hashed * 100 / file_size);
         if (current_progress != last_progress) {
             int64_t const t_avg = bandwidth_track.rollingAverage().count();
             uint32_t const bandwidth_mib_s = static_cast<uint32_t>((t_avg) ? ((static_cast<int64_t>(HASH_FILE_BUFFER_SIZE) * 1'000'000'000ll) / (t_avg * 1'048'576ll)) : 0);
@@ -519,8 +519,8 @@ void OperationScheduler::doCreate(OperationState& op) {
             HashResult const res = hashFile(op.event_handler, *op.hasher, fin, read_states);
             if (res == HashResult::DigestReady) {
                 Digest const d = op.hasher->finalize();
-                op.checksum_file.addEntry(utf8_relative_path, op.hasher->finalize());
                 signalFileCompleted(op.event_handler, utf8_relative_path, d, utf8_absolute_path, EventHandler::CompletionStatus::Ok);
+                op.checksum_file.addEntry(utf8_relative_path, std::move(d));
                 ++result.ok;
             } else if ((res == HashResult::Missing) || (res == HashResult::Error)) {
                 signalFileCompleted(op.event_handler, utf8_relative_path, {}, utf8_absolute_path, EventHandler::CompletionStatus::Bad);
@@ -532,7 +532,7 @@ void OperationScheduler::doCreate(OperationState& op) {
             ++result.total;
         }
         FileOutputWin32 writer(op.checksum_path);
-        op.checksum_provider->serialize(writer, op.checksum_file);
+        op.checksum_provider->writeNewFile(writer, op.checksum_file);
         signalCheckCompleted(op.event_handler, result);
     } catch (...) {
         signalError(op.event_handler, Error::SystemError, {});

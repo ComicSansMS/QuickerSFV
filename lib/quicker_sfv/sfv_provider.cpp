@@ -14,26 +14,30 @@ ChecksumProviderPtr createSfvProvider() {
 SfvProvider::SfvProvider() = default;
 SfvProvider::~SfvProvider() = default;
 
-[[nodiscard]] std::u8string_view SfvProvider::fileExtensions() const {
+ProviderCapabilities SfvProvider::getCapabilities() const {
+    return ProviderCapabilities::Full;
+}
+
+std::u8string_view SfvProvider::fileExtensions() const {
     return u8"*.sfv";
 }
 
-[[nodiscard]] std::u8string_view SfvProvider::fileDescription() const {
+std::u8string_view SfvProvider::fileDescription() const {
     return u8"Sfv File";
 }
 
-[[nodiscard]] HasherPtr SfvProvider::createHasher(HasherOptions const& hasher_options) const {
+HasherPtr SfvProvider::createHasher(HasherOptions const& hasher_options) const {
     if (hasher_options.has_avx512) {
         return HasherPtr(new Crc32Hasher(Crc32UseAvx512_T{}), detail::HasherPtrDeleter{ [](Hasher* p) { delete p; } });
     }
     return HasherPtr(new Crc32Hasher(), detail::HasherPtrDeleter{ [](Hasher* p) { delete p; } });
 }
 
-[[nodiscard]] Digest SfvProvider::digestFromString(std::u8string_view str) const {
+Digest SfvProvider::digestFromString(std::u8string_view str) const {
     return Crc32Hasher::digestFromString(str);
 }
 
-[[nodiscard]] ChecksumFile SfvProvider::readFromFile(FileInput& file_input) const {
+ChecksumFile SfvProvider::readFromFile(FileInput& file_input) const {
     LineReader reader(file_input);
     ChecksumFile ret;
     for (;;) {
@@ -58,7 +62,7 @@ SfvProvider::~SfvProvider() = default;
     return ret;
 }
 
-void SfvProvider::serialize(FileOutput& file_output, ChecksumFile const& f) const {
+void SfvProvider::writeNewFile(FileOutput& file_output, ChecksumFile const& f) const {
     for (auto const& e : f.getEntries()) {
         std::u8string out_str;
         out_str.reserve(e.path.size() + 11);

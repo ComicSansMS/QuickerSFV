@@ -16,24 +16,27 @@ ChecksumProviderPtr createMD5Provider() {
 MD5Provider::MD5Provider() = default;
 MD5Provider::~MD5Provider() = default;
 
-[[nodiscard]] std::u8string_view MD5Provider::fileExtensions() const {
+ProviderCapabilities MD5Provider::getCapabilities() const {
+    return ProviderCapabilities::Full;
+}
+
+std::u8string_view MD5Provider::fileExtensions() const {
     return u8"*.md5";
 }
 
-[[nodiscard]] std::u8string_view MD5Provider::fileDescription() const {
+std::u8string_view MD5Provider::fileDescription() const {
     return u8"MD5";
 }
 
-[[nodiscard]] HasherPtr MD5Provider::createHasher(HasherOptions const&) const {
+HasherPtr MD5Provider::createHasher(HasherOptions const&) const {
     return HasherPtr(new MD5Hasher, detail::HasherPtrDeleter{ [](Hasher* p) { delete p; } });
 }
 
-[[nodiscard]] Digest MD5Provider::digestFromString(std::u8string_view str) const {
+Digest MD5Provider::digestFromString(std::u8string_view str) const {
     return MD5Hasher::digestFromString(str);
 }
 
-
-[[nodiscard]] ChecksumFile MD5Provider::readFromFile(FileInput& file_input) const {
+ChecksumFile MD5Provider::readFromFile(FileInput& file_input) const {
     LineReader reader(file_input);
     ChecksumFile ret;
     for (;;) {
@@ -56,7 +59,7 @@ MD5Provider::~MD5Provider() = default;
     return ret;
 }
 
-void MD5Provider::serialize(FileOutput& file_output, ChecksumFile const& f) const {
+void MD5Provider::writeNewFile(FileOutput& file_output, ChecksumFile const& f) const {
     for (auto const& e : f.getEntries()) {
         std::u8string out_str;
         out_str.reserve(e.path.size() + 36);

@@ -35,18 +35,23 @@ struct HasherOptions {
     bool has_avx512;
 };
 
+enum class ProviderCapabilities {
+    Full,
+};
+
 class ChecksumProvider {
 public:
     ChecksumProvider& operator=(ChecksumProvider&&) = delete;
 
     virtual ~ChecksumProvider() = 0;
+    [[nodiscard]] virtual ProviderCapabilities getCapabilities() const = 0;
     [[nodiscard]] virtual std::u8string_view fileExtensions() const = 0;
     [[nodiscard]] virtual std::u8string_view fileDescription() const = 0;
     [[nodiscard]] virtual HasherPtr createHasher(HasherOptions const& hasher_options) const = 0;
     [[nodiscard]] virtual Digest digestFromString(std::u8string_view str) const = 0;
 
     virtual ChecksumFile readFromFile(FileInput& file_input) const = 0;
-    virtual void serialize(FileOutput& file_output, ChecksumFile const& f) const = 0;
+    virtual void writeNewFile(FileOutput& file_output, ChecksumFile const& f) const = 0;
 };
 
 }

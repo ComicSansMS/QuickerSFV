@@ -16,13 +16,14 @@ private:
     SfvProvider();
 public:
     ~SfvProvider() override;
+    [[nodiscard]] ProviderCapabilities getCapabilities() const override;
     [[nodiscard]] std::u8string_view fileExtensions() const override;
     [[nodiscard]] std::u8string_view fileDescription() const override;
     [[nodiscard]] HasherPtr createHasher(HasherOptions const& hasher_options) const override;
     [[nodiscard]] Digest digestFromString(std::u8string_view str) const override;
 
     [[nodiscard]] ChecksumFile readFromFile(FileInput& file_input) const override;
-    void serialize(FileOutput& file_output, ChecksumFile const& f) const override;
+    void writeNewFile(FileOutput& file_output, ChecksumFile const& f) const override;
 };
 
 ChecksumProviderPtr createSfvProvider();

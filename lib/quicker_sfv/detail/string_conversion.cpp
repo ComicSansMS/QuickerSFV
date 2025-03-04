@@ -12,7 +12,7 @@ std::byte hex_char_to_nibble(char8_t x) {
     } else if ((x >= 'a') && (x <= 'f')) {
         return static_cast<std::byte>(x - u8'a' + 10);
     } else if ((x >= 'A') && (x <= 'F')) {
-        return static_cast<std::byte>(x - u8'a' + 10);
+        return static_cast<std::byte>(x - u8'A' + 10);
     } else {
         throwException(Error::ParserError);
     }
