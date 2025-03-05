@@ -8,7 +8,6 @@
 #include <quicker_sfv/file_io.hpp>
 #include <quicker_sfv/hasher.hpp>
 #include <quicker_sfv/md5_provider.hpp>
-#include <quicker_sfv/plugin_support.hpp>
 #include <quicker_sfv/sfv_provider.hpp>
 #include <quicker_sfv/utf.hpp>
 #include <quicker_sfv/version.hpp>

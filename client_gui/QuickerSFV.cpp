@@ -22,6 +22,7 @@
 #include <quicker_sfv/ui/event_handler.hpp>
 #include <quicker_sfv/ui/file_dialog.hpp>
 #include <quicker_sfv/ui/operation_scheduler.hpp>
+#include <quicker_sfv/ui/plugin_support.hpp>
 #include <quicker_sfv/ui/string_helper.hpp>
 #include <quicker_sfv/ui/user_messages.hpp>
 
@@ -123,7 +124,7 @@ public:
             if (hmod) {
                 QuickerSFV_LoadPluginFunc loader = (QuickerSFV_LoadPluginFunc)GetProcAddress(hmod, "QuickerSFV_LoadPlugin");
                 if (loader) {
-                    ChecksumProviderPtr p = quicker_sfv::loadPlugin(loader);
+                    ChecksumProviderPtr p = quicker_sfv::gui::loadPlugin(loader);
                     if (p) {
                         addProvider(std::move(p));
                     }

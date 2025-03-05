@@ -74,7 +74,6 @@ target_sources(quicker_sfv
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/hasher.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/line_reader.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5_provider.hpp
-    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/plugin_support.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/quicker_sfv.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/sfv_provider.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/utf.hpp
@@ -88,7 +87,6 @@ target_sources(quicker_sfv
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/hasher.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/line_reader.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5_provider.cpp
-    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/plugin_support.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/quicker_sfv.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/sfv_provider.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/utf.cpp
@@ -138,6 +136,7 @@ if(MSVC)
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/enforce.cpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/file_dialog.cpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/operation_scheduler.cpp
+        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/plugin_support.cpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/string_helper.cpp
         PUBLIC
         FILE_SET HEADERS
@@ -148,6 +147,7 @@ if(MSVC)
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/event_handler.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/file_dialog.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/operation_scheduler.hpp
+        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/plugin_support.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/string_helper.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/user_messages.hpp
     )

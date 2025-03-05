@@ -1,4 +1,4 @@
-#include <quicker_sfv/plugin_support.hpp>
+#include <quicker_sfv/ui/plugin_support.hpp>
 
 #include <quicker_sfv/error.hpp>
 #include <quicker_sfv/digest.hpp>
@@ -9,7 +9,7 @@
 #include <memory>
 #include <utility>
 
-namespace quicker_sfv {
+namespace quicker_sfv::gui {
 namespace {
 
 struct PluginDigest {
