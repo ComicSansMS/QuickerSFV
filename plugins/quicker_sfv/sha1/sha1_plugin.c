@@ -130,7 +130,6 @@ static QuickerSFV_ResultCode IQuickerSFV_Hasher_Finalize(IQuickerSFV_Hasher* sel
     if (!user_data) { return QuickerSFV_Result_InsufficientMemory; }
     SHA1_Final(user_data->digest, &h->context);
     h->is_valid = 0;
-    user_data->digest[SHA_DIGEST_LENGTH] = 0;
     h->provider->callbacks.fillDigest(out_digest, user_data, free,
                                       IQuickerSFV_Hasher_Finalize_clone,
                                       IQuickerSFV_Hasher_Finalize_to_string,
