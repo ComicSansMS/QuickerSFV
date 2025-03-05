@@ -54,12 +54,12 @@ static struct IQuickerSFV_Hasher_Vtbl g_HasherVtbl;
 static struct IQuickerSFV_ChecksumProvider_Vtbl g_ChecksumProviderVtbl;
 
 typedef struct tag_QuickerSFV_ChecksumProvider_Impl {
-    IQuickerSFV_ChecksumProvider interface;
+    IQuickerSFV_ChecksumProvider base_type;
     QuickerSFV_ChecksumProvider_Callbacks callbacks;
 } QuickerSFV_ChecksumProvider_Impl;
 
 typedef struct tag_QuickerSFV_Hasher_Impl {
-    IQuickerSFV_Hasher interface;
+    IQuickerSFV_Hasher base_type;
     QuickerSFV_ChecksumProvider_Impl* provider;
     SHA_CTX context;
     int8_t is_valid;
@@ -188,10 +188,10 @@ static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_CreateHasher(IQuickerS
     QuickerSFV_ChecksumProvider_Impl* p = (QuickerSFV_ChecksumProvider_Impl*)self;
     QuickerSFV_Hasher_Impl* impl = malloc(sizeof(QuickerSFV_Hasher_Impl));
     if (!impl) { return QuickerSFV_Result_InsufficientMemory; }
-    impl->interface.vptr = &g_HasherVtbl;
+    impl->base_type.vptr = &g_HasherVtbl;
     impl->provider = p;
     impl->is_valid = 0;
-    *out_ihasher = &impl->interface;
+    *out_ihasher = &impl->base_type;
     return QuickerSFV_Result_OK;
 }
 
@@ -211,7 +211,7 @@ static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_DigestFromString(IQuic
     Digest_UserData* user_data = createDigestUserData();
     if (!user_data) { return QuickerSFV_Result_InsufficientMemory; }
     for (size_t i = 0; i < SHA_DIGEST_LENGTH; ++i) {
-        int8_t success;
+        int8_t success = 1;
         user_data->digest[i] = hex_str_to_byte(string_data[2*i], string_data[2*i + 1], &success);
         if (!success) { free(user_data); return QuickerSFV_Result_Failed; }
     }
@@ -250,12 +250,15 @@ static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_ReadFromFile(IQuickerS
     char digest[SHA_DIGEST_LENGTH * 2 + 1];
     while ((res = read_line_text(read_provider, &line, &line_size)) == QuickerSFV_CallbackResult_MoreData) {
         size_t li = 0;
-        if (line_size == 0) { continue; }
+        if (line_size < 1) { continue; }
         if (line[0] == ';') { continue; }
+        if (line_size < 2*SHA_DIGEST_LENGTH + 3 + li) { return QuickerSFV_Result_Failed; }
         for (size_t i = 0; i < SHA_DIGEST_LENGTH; ++i) {
-            int8_t success;
+            // validate that the characters are in range for digest
+            int8_t success = 1;
             hex_str_to_byte(line[li + 2*i], line[li + 2*i + 1], &success);
             if (!success) { return QuickerSFV_Result_Failed; }
+            // copy characters to digest string
             digest[2*i] = line[li + 2*i];
             digest[2*i + 1] = line[li + 2*i + 1];
         }
@@ -263,9 +266,10 @@ static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_ReadFromFile(IQuickerS
         li += 2*SHA_DIGEST_LENGTH;
         if (line[li++] != ' ') { return QuickerSFV_Result_Failed; }
         if (line[li++] != '*') { return QuickerSFV_Result_Failed; }
-        char* filename = malloc(line_size - li);
+        char* filename = malloc(line_size - li + 1);
         if (!filename) { return QuickerSFV_Result_InsufficientMemory; }
         memcpy(filename, &line[li], line_size - li);
+        filename[line_size - li] = '\0';
         res = new_entry_callback(read_provider, filename, digest);
         free(filename);
         if (res != QuickerSFV_CallbackResult_Ok) { break; }
@@ -331,7 +335,7 @@ QUICKER_SFV_PLUGIN_SHA1_EXPORT IQuickerSFV_ChecksumProvider* QuickerSFV_LoadPlug
     init_vtables();
     QuickerSFV_ChecksumProvider_Impl* ret = malloc(sizeof(QuickerSFV_ChecksumProvider_Impl));
     if (!ret) { return NULL; }
-    ret->interface.vptr = &g_ChecksumProviderVtbl;
+    ret->base_type.vptr = &g_ChecksumProviderVtbl;
     ret->callbacks = *cbs;
-    return &ret->interface;
+    return &ret->base_type;
 }
