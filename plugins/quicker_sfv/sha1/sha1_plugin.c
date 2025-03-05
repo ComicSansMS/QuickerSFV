@@ -70,14 +70,14 @@ static QuickerSFV_GUID const DIGEST_GUID = { 0xfdd46ae9, 0x55ab, 0x4a19, 0x967ac
 
 typedef struct tag_Digest_UserData {
     QuickerSFV_GUID guid;
-    unsigned char digest[SHA_DIGEST_LENGTH + 1];
+    unsigned char digest[SHA_DIGEST_LENGTH];
 } Digest_UserData;
 
 static Digest_UserData* createDigestUserData() {
     Digest_UserData* user_data = malloc(sizeof(Digest_UserData));
     if (!user_data) { return NULL; }
     memcpy(&user_data->guid, &DIGEST_GUID, sizeof(QuickerSFV_GUID));
-    memset(&user_data->digest, 0, SHA_DIGEST_LENGTH + 1);
+    memset(&user_data->digest, 0, SHA_DIGEST_LENGTH);
     return user_data;
 }
 
@@ -111,9 +111,15 @@ static size_t IQuickerSFV_Hasher_Finalize_to_string(void* user_data, char* out_s
 }
 
 static int8_t IQuickerSFV_Hasher_Finalize_compare(void* user_data_lhs, void* user_data_rhs) {
-    int const res = memcmp(user_data_lhs, user_data_rhs, sizeof(Digest_UserData));
-    if (res < 0) { return -1; }
-    if (res > 0) { return 1; }
+    assert(memcmp(&((Digest_UserData*)user_data_lhs)->guid, &DIGEST_GUID, sizeof(DIGEST_GUID)) == 0);
+    if (memcmp(&((Digest_UserData*)user_data_rhs)->guid, &DIGEST_GUID, sizeof(DIGEST_GUID)) != 0) {
+        return 1;
+    }
+    Digest_UserData* ud_lhs = (Digest_UserData*)user_data_lhs;
+    Digest_UserData* ud_rhs = (Digest_UserData*)user_data_rhs;
+    for (size_t i = 0; i < SHA_DIGEST_LENGTH; ++i) {
+        if (ud_lhs->digest[i] != ud_rhs->digest[i]) { return 1; }
+    }
     return 0;
 }
 
