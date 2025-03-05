@@ -202,7 +202,7 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
         };
         pif->CreateHasher(&hasher, &opts);
         plugin_interface::IHasher* h = std::bit_cast<plugin_interface::IHasher*>(hasher);
-        return HasherPtr(new PluginHasher(h, pif), detail::HasherPtrDeleter{ .deleter = [](Hasher* p) { delete p; } });
+        return HasherPtr(new PluginHasher(h, pif));
     }
     
     [[nodiscard]] Digest digestFromString(std::u8string_view str) const override {
@@ -302,7 +302,7 @@ QuickerSFV_ChecksumProvider_Callbacks* pluginCallbacks() {
 ChecksumProviderPtr loadPlugin(QuickerSFV_LoadPluginFunc plugin_load_function) {
     IQuickerSFV_ChecksumProvider* p = plugin_load_function(pluginCallbacks());
     plugin_interface::IChecksumProvider* pif = std::bit_cast<plugin_interface::IChecksumProvider*>(p);
-    return ChecksumProviderPtr(new PluginChecksumProvider(pif), detail::ChecksumProviderPtrDeleter{ .deleter = [](ChecksumProvider* p) { delete p; } });
+    return ChecksumProviderPtr(new PluginChecksumProvider(pif));
 }
 
 }

@@ -23,7 +23,8 @@ typedef enum tag_QuickerSFV_CallbackResult {
 } QuickerSFV_CallbackResult;
 
 typedef enum tag_QuickerSFV_ProviderCapabilities {
-    QuickerSFV_ProviderCapabilities_Full = 0,
+    QuickerSFV_ProviderCapabilities_Full     = 0,
+    QuickerSFV_ProviderCapabilities_Reserved = 0xffffffff,
 } QuickerSFV_ProviderCapabilities;
 
 typedef struct tag_QuickerSFV_GUID {

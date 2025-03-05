@@ -10,7 +10,7 @@
 namespace quicker_sfv {
 
 ChecksumProviderPtr createMD5Provider() {
-    return ChecksumProviderPtr(new MD5Provider, detail::ChecksumProviderPtrDeleter{[](ChecksumProvider* p) { delete p; }});
+    return ChecksumProviderPtr(new MD5Provider);
 }
 
 MD5Provider::MD5Provider() = default;
@@ -29,7 +29,7 @@ std::u8string_view MD5Provider::fileDescription() const {
 }
 
 HasherPtr MD5Provider::createHasher(HasherOptions const&) const {
-    return HasherPtr(new MD5Hasher, detail::HasherPtrDeleter{ [](Hasher* p) { delete p; } });
+    return std::make_unique<MD5Hasher>();
 }
 
 Digest MD5Provider::digestFromString(std::u8string_view str) const {

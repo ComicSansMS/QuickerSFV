@@ -8,7 +8,7 @@
 namespace quicker_sfv {
 
 ChecksumProviderPtr createSfvProvider() {
-    return ChecksumProviderPtr(new SfvProvider, detail::ChecksumProviderPtrDeleter{ [](ChecksumProvider* p) { delete p; } });
+    return ChecksumProviderPtr(new SfvProvider());
 }
 
 SfvProvider::SfvProvider() = default;
@@ -28,9 +28,9 @@ std::u8string_view SfvProvider::fileDescription() const {
 
 HasherPtr SfvProvider::createHasher(HasherOptions const& hasher_options) const {
     if (hasher_options.has_avx512) {
-        return HasherPtr(new Crc32Hasher(Crc32UseAvx512_T{}), detail::HasherPtrDeleter{ [](Hasher* p) { delete p; } });
+        return HasherPtr(new Crc32Hasher(Crc32UseAvx512_T{}));
     }
-    return HasherPtr(new Crc32Hasher(), detail::HasherPtrDeleter{ [](Hasher* p) { delete p; } });
+    return HasherPtr(new Crc32Hasher());
 }
 
 Digest SfvProvider::digestFromString(std::u8string_view str) const {

@@ -13,22 +13,8 @@ namespace quicker_sfv {
 
 class ChecksumProvider;
 
-namespace detail {
-struct HasherPtrDeleter {
-    void (*deleter)(Hasher* p);
-    void operator()(Hasher* p) const;
-};
-struct ChecksumProviderPtrDeleter {
-    void (*deleter)(ChecksumProvider* p);
-    void operator()(ChecksumProvider* p) const;
-};
-}
-
-using HasherPtr = std::unique_ptr<Hasher, detail::HasherPtrDeleter>;
-
-using ChecksumProviderPtr = std::unique_ptr<ChecksumProvider, detail::ChecksumProviderPtrDeleter>;
-
-using ChecksumFileCreate = ChecksumProviderPtr const& (*)();
+using HasherPtr = std::unique_ptr<Hasher>;
+using ChecksumProviderPtr = std::unique_ptr<ChecksumProvider>;
 
 struct HasherOptions {
     bool has_sse42;
