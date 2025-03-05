@@ -26,7 +26,9 @@
 #include <quicker_sfv/ui/string_helper.hpp>
 #include <quicker_sfv/ui/user_messages.hpp>
 
+#ifndef QUICKER_SFV_BUILD_SELF_CONTAINED
 #include <quicker_sfv/plugin/plugin_sdk.h>
+#endif
 
 #include <Windows.h>
 #include <windowsx.h>
@@ -111,6 +113,7 @@ public:
     }
 
     void loadPlugins() {
+#ifndef QUICKER_SFV_BUILD_SELF_CONTAINED
         WIN32_FIND_DATA find_data;
         std::u16string search_path = getExeDirectory();
         if (search_path.empty()) { return; }
@@ -131,6 +134,7 @@ public:
                 }
             }
         } while (FindNextFile(hsearch, &find_data) != FALSE);
+#endif
     }
 
 private:

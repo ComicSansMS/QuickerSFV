@@ -1,3 +1,4 @@
+#ifndef QUICKER_SFV_BUILD_SELF_CONTAINED
 #include <quicker_sfv/ui/plugin_support.hpp>
 
 #include <quicker_sfv/error.hpp>
@@ -306,3 +307,4 @@ ChecksumProviderPtr loadPlugin(QuickerSFV_LoadPluginFunc plugin_load_function) {
 }
 
 }
+#endif // QUICKER_SFV_BUILD_SELF_CONTAINED
