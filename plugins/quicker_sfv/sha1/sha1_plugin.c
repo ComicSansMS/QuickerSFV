@@ -81,7 +81,7 @@ static Digest_UserData* createDigestUserData() {
     return user_data;
 }
 
-static QuickerSFV_ResultCode IQuickerSFV_Hasher_AddData(IQuickerSFV_Hasher* self, char const* data, size_t size) {
+static QuickerSFV_Result IQuickerSFV_Hasher_AddData(IQuickerSFV_Hasher* self, char const* data, size_t size) {
     QuickerSFV_Hasher_Impl* h = (QuickerSFV_Hasher_Impl*)self;
     assert(h->is_valid);
     SHA1_Update(&h->context, data, size);
@@ -123,7 +123,7 @@ static int8_t IQuickerSFV_Hasher_Finalize_compare(void* user_data_lhs, void* use
     return 0;
 }
 
-static QuickerSFV_ResultCode IQuickerSFV_Hasher_Finalize(IQuickerSFV_Hasher* self, QuickerSFV_DigestP out_digest) {
+static QuickerSFV_Result IQuickerSFV_Hasher_Finalize(IQuickerSFV_Hasher* self, QuickerSFV_DigestP out_digest) {
     QuickerSFV_Hasher_Impl* h = (QuickerSFV_Hasher_Impl*)self;
     assert(h->is_valid);
     Digest_UserData* user_data = createDigestUserData();
@@ -137,26 +137,26 @@ static QuickerSFV_ResultCode IQuickerSFV_Hasher_Finalize(IQuickerSFV_Hasher* sel
     return QuickerSFV_Result_OK;
 }
 
-static QuickerSFV_ResultCode IQuickerSFV_Hasher_Reset(IQuickerSFV_Hasher* self) {
+static QuickerSFV_Result IQuickerSFV_Hasher_Reset(IQuickerSFV_Hasher* self) {
     QuickerSFV_Hasher_Impl* h = (QuickerSFV_Hasher_Impl*)self;
     SHA1_Init(&h->context);
     h->is_valid = 1;
     return QuickerSFV_Result_OK;
 }
 
-static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_Delete(IQuickerSFV_ChecksumProvider* self) {
+static QuickerSFV_Result IQuickerSFV_ChecksumProvider_Delete(IQuickerSFV_ChecksumProvider* self) {
     free(self);
     return QuickerSFV_Result_OK;
 }
 
-static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_GetProviderCapabilities(IQuickerSFV_ChecksumProvider* self,
+static QuickerSFV_Result IQuickerSFV_ChecksumProvider_GetProviderCapabilities(IQuickerSFV_ChecksumProvider* self,
                                                                                   QuickerSFV_ProviderCapabilities* out_capabilities) {
     UNREFERENCED_PARAMETER(self);
     *out_capabilities = QuickerSFV_ProviderCapabilities_Full;
     return QuickerSFV_Result_OK;
 }
 
-static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_FileExtension(IQuickerSFV_ChecksumProvider* self,
+static QuickerSFV_Result IQuickerSFV_ChecksumProvider_FileExtension(IQuickerSFV_ChecksumProvider* self,
                                                                         char* out_utf8_str,
                                                                         size_t* in_out_size) {
     UNREFERENCED_PARAMETER(self);
@@ -171,7 +171,7 @@ static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_FileExtension(IQuicker
     return QuickerSFV_Result_OK;
 }
 
-static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_FileDescription(IQuickerSFV_ChecksumProvider* self,
+static QuickerSFV_Result IQuickerSFV_ChecksumProvider_FileDescription(IQuickerSFV_ChecksumProvider* self,
                                                                           char* out_utf8_str,
                                                                           size_t* in_out_size) {
     UNREFERENCED_PARAMETER(self);
@@ -186,7 +186,7 @@ static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_FileDescription(IQuick
     return QuickerSFV_Result_OK;
 }
 
-static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_CreateHasher(IQuickerSFV_ChecksumProvider* self,
+static QuickerSFV_Result IQuickerSFV_ChecksumProvider_CreateHasher(IQuickerSFV_ChecksumProvider* self,
                                                                        IQuickerSFV_Hasher** out_ihasher,
                                                                        struct QuickerSFV_HasherOptions* opts) {
     UNREFERENCED_PARAMETER(opts);
@@ -200,13 +200,13 @@ static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_CreateHasher(IQuickerS
     return QuickerSFV_Result_OK;
 }
 
-QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_DeleteHasher(IQuickerSFV_ChecksumProvider* self, IQuickerSFV_Hasher* ihasher) {
+QuickerSFV_Result IQuickerSFV_ChecksumProvider_DeleteHasher(IQuickerSFV_ChecksumProvider* self, IQuickerSFV_Hasher* ihasher) {
     UNREFERENCED_PARAMETER(self);
     free(ihasher);
     return QuickerSFV_Result_OK;
 }
 
-static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_DigestFromString(IQuickerSFV_ChecksumProvider* self,
+static QuickerSFV_Result IQuickerSFV_ChecksumProvider_DigestFromString(IQuickerSFV_ChecksumProvider* self,
                                                                            QuickerSFV_DigestP out_digest,
                                                                            char const* string_data, size_t string_size) {
     QuickerSFV_ChecksumProvider_Impl* p = (QuickerSFV_ChecksumProvider_Impl*)self;
@@ -227,7 +227,7 @@ static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_DigestFromString(IQuic
     return QuickerSFV_Result_OK;
 }
 
-static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_ReadFromFile(IQuickerSFV_ChecksumProvider* self,
+static QuickerSFV_Result IQuickerSFV_ChecksumProvider_ReadFromFile(IQuickerSFV_ChecksumProvider* self,
         QuickerSFV_FileReadProviderP read_provider,
         QuickerSFV_CallbackResult (*read_file_binary)(
             QuickerSFV_FileReadProviderP read_provider,
@@ -281,7 +281,7 @@ static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_ReadFromFile(IQuickerS
     }
     return (res == QuickerSFV_CallbackResult_Ok) ? QuickerSFV_Result_OK : QuickerSFV_Result_Failed;
 }
-static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_WriteNewFile(IQuickerSFV_ChecksumProvider* self,
+static QuickerSFV_Result IQuickerSFV_ChecksumProvider_WriteNewFile(IQuickerSFV_ChecksumProvider* self,
         QuickerSFV_FileWriteProviderP write_provider,
         QuickerSFV_CallbackResult (*Write)(
             QuickerSFV_FileWriteProviderP write_provider,
@@ -313,6 +313,7 @@ static QuickerSFV_ResultCode IQuickerSFV_ChecksumProvider_WriteNewFile(IQuickerS
             write_buffer_size = required_size * 2;
         }
         bytes_formatted = sprintf_s(write_buffer, write_buffer_size, "%s *%s\r\n", digest, filename);
+        if (bytes_formatted <= 0) { return QuickerSFV_Result_Failed; }
         res = Write(write_provider, write_buffer, bytes_formatted, &bytes_written);
         if (res != QuickerSFV_CallbackResult_Ok) { break; }
     }

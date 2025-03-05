@@ -120,19 +120,19 @@ struct PluginHasher : public quicker_sfv::Hasher {
     }
     PluginHasher& operator=(PluginHasher&&) = delete;
     void addData(std::span<std::byte const> data) override {
-        QuickerSFV_ResultCode const res = hasher->AddData(reinterpret_cast<char const*>(data.data()), data.size());
+        QuickerSFV_Result const res = hasher->AddData(reinterpret_cast<char const*>(data.data()), data.size());
         if (res != QuickerSFV_Result_OK) { throwException(Error::PluginError); }
     }
 
     Digest finalize() override {
         Digest digest;
-        QuickerSFV_ResultCode const res = hasher->Finalize(reinterpret_cast<QuickerSFV_DigestP>(&digest));
+        QuickerSFV_Result const res = hasher->Finalize(reinterpret_cast<QuickerSFV_DigestP>(&digest));
         if (res != QuickerSFV_Result_OK) { throwException(Error::PluginError); }
         return digest;
     }
     
     void reset() override {
-        QuickerSFV_ResultCode const res = hasher->Reset();
+        QuickerSFV_Result const res = hasher->Reset();
         if (res != QuickerSFV_Result_OK) { throwException(Error::PluginError); }
     }
 };
