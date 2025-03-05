@@ -108,10 +108,10 @@ void fillDigest(QuickerSFV_DigestP out_digest,
 }
 
 struct PluginHasher : public quicker_sfv::Hasher {
-    quicker_sfv_interface::IHasher* hasher;
-    quicker_sfv_interface::IChecksumProvider* pif;
+    plugin_interface::IHasher* hasher;
+    plugin_interface::IChecksumProvider* pif;
 
-    explicit PluginHasher(quicker_sfv_interface::IHasher* hasher, quicker_sfv_interface::IChecksumProvider* pif)
+    explicit PluginHasher(plugin_interface::IHasher* hasher, plugin_interface::IChecksumProvider* pif)
         :hasher(hasher), pif(pif)
     {}
 
@@ -138,11 +138,11 @@ struct PluginHasher : public quicker_sfv::Hasher {
 };
 
 struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
-    quicker_sfv_interface::IChecksumProvider* pif;
+    plugin_interface::IChecksumProvider* pif;
     std::u8string file_extension;
     std::u8string file_description;
 
-    explicit PluginChecksumProvider(quicker_sfv_interface::IChecksumProvider* pif)
+    explicit PluginChecksumProvider(plugin_interface::IChecksumProvider* pif)
         :pif(pif)
     {
         size_t required_size_file_extension = 0;
@@ -201,7 +201,7 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
             .has_avx512 = hasher_options.has_avx512
         };
         pif->CreateHasher(&hasher, &opts);
-        quicker_sfv_interface::IHasher* h = std::bit_cast<quicker_sfv_interface::IHasher*>(hasher);
+        plugin_interface::IHasher* h = std::bit_cast<plugin_interface::IHasher*>(hasher);
         return HasherPtr(new PluginHasher(h, pif), detail::HasherPtrDeleter{ .deleter = [](Hasher* p) { delete p; } });
     }
     
@@ -301,7 +301,7 @@ QuickerSFV_ChecksumProvider_Callbacks* pluginCallbacks() {
 
 ChecksumProviderPtr loadPlugin(QuickerSFV_LoadPluginFunc plugin_load_function) {
     IQuickerSFV_ChecksumProvider* p = plugin_load_function(pluginCallbacks());
-    quicker_sfv_interface::IChecksumProvider* pif = std::bit_cast<quicker_sfv_interface::IChecksumProvider*>(p);
+    plugin_interface::IChecksumProvider* pif = std::bit_cast<plugin_interface::IChecksumProvider*>(p);
     return ChecksumProviderPtr(new PluginChecksumProvider(pif), detail::ChecksumProviderPtrDeleter{ .deleter = [](ChecksumProvider* p) { delete p; } });
 }
 

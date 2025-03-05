@@ -1,6 +1,12 @@
 #ifndef INCLUDE_GUARD_QUICKER_SFV_PLUGIN_SDK_PLUGIN_SDK_H
 #define INCLUDE_GUARD_QUICKER_SFV_PLUGIN_SDK_PLUGIN_SDK_H
 
+#ifndef QUICKER_SFV_NO_PROJECT_VERSION
+#   cmakedefine01 QUICKER_SFV_PROJECT_VERSION_MAJOR
+#   cmakedefine01 QUICKER_SFV_PROJECT_VERSION_MINOR
+#   cmakedefine01 QUICKER_SFV_PROJECT_VERSION_PATCH
+#endif
+
 #include <quicker_sfv/plugin/interfaces.h>
 
 typedef IQuickerSFV_ChecksumProvider* (*QuickerSFV_LoadPluginFunc)(QuickerSFV_ChecksumProvider_Callbacks*);

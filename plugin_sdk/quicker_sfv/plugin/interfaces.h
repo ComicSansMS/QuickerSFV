@@ -160,7 +160,8 @@ struct IQuickerSFV_ChecksumProvider_Vtbl {
 #endif
 
 #ifdef __cplusplus
-namespace quicker_sfv_interface {
+
+namespace quicker_sfv::plugin_interface {
 
 struct IFileOutput {
     virtual QuickerSFV_Result Write(

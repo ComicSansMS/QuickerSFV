@@ -41,12 +41,17 @@ endif()
 add_subdirectory(external/chromium_zlib)
 
 add_library(quicker_sfv_plugin_sdk INTERFACE)
+configure_file(
+    ${PROJECT_SOURCE_DIR}/plugin_sdk/quicker_sfv/plugin/plugin_sdk.h.in
+    ${PROJECT_BINARY_DIR}/generated/plugin_sdk/quicker_sfv/plugin/plugin_sdk.h
+    @ONLY
+)
 target_sources(quicker_sfv_plugin_sdk INTERFACE
     FILE_SET HEADERS
-    BASE_DIRS ${PROJECT_SOURCE_DIR}/plugin_sdk
+    BASE_DIRS ${PROJECT_SOURCE_DIR}/plugin_sdk ${PROJECT_BINARY_DIR}/generated/plugin_sdk
     FILES
     ${PROJECT_SOURCE_DIR}/plugin_sdk/quicker_sfv/plugin/interfaces.h
-    ${PROJECT_SOURCE_DIR}/plugin_sdk/quicker_sfv/plugin/plugin_sdk.h
+    ${PROJECT_BINARY_DIR}/generated/plugin_sdk/quicker_sfv/plugin/plugin_sdk.h
 )
 
 add_library(quicker_sfv STATIC)
