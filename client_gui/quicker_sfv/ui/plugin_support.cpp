@@ -182,6 +182,8 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
         switch (caps) {
         case QuickerSFV_ProviderCapabilities_Full:
             return ProviderCapabilities::Full;
+        case QuickerSFV_ProviderCapabilities_VerifyOnly:
+            return ProviderCapabilities::VerifyOnly;
         }
         throwException(Error::PluginError);
     }
@@ -304,6 +306,13 @@ ChecksumProviderPtr loadPlugin(QuickerSFV_LoadPluginFunc plugin_load_function) {
     IQuickerSFV_ChecksumProvider* p = plugin_load_function(pluginCallbacks());
     plugin_interface::IChecksumProvider* pif = std::bit_cast<plugin_interface::IChecksumProvider*>(p);
     return ChecksumProviderPtr(new PluginChecksumProvider(pif));
+}
+
+ChecksumProviderPtr loadPluginCpp(QuickerSFV_LoadPluginCppFunc plugin_cpp_load_function) {
+    QuickerSFV_CppPluginLoader* l = nullptr;
+    plugin_cpp_load_function(&l);
+    if (!l) { throwException(Error::PluginError); }
+    return l->createChecksumProvider();
 }
 
 }

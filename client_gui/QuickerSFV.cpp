@@ -27,7 +27,7 @@
 #include <quicker_sfv/ui/user_messages.hpp>
 
 #ifndef QUICKER_SFV_BUILD_SELF_CONTAINED
-#include <quicker_sfv/plugin/plugin_sdk.h>
+#   include <quicker_sfv/plugin/plugin_sdk.h>
 #endif
 
 #include <Windows.h>
@@ -55,26 +55,24 @@ using namespace quicker_sfv;
 using namespace quicker_sfv::gui;
 
 class FileProviders {
-private:
-    std::vector<ChecksumProviderPtr> m_providers;
+public:
     struct FileType {
         std::u8string extensions;
         std::u8string description;
+        size_t provider_index;
     };
-    std::vector<FileType> m_fileTypes;
+private:
+    std::vector<ChecksumProviderPtr> m_providers;
+    std::vector<FileType> m_fileTypesVerify;
+    std::vector<FileType> m_fileTypesCreate;
 public:
     FileProviders()
     {
         addProvider(quicker_sfv::createSfvProvider());
         addProvider(quicker_sfv::createMD5Provider());
-        // @todo:
-        //  - .ckz
-        //  - .par
-        //  - .csv
-        //  - .txt
     }
 
-    ChecksumProvider* getMatchingProviderFor(std::u8string_view filename) {
+    ChecksumProvider* getMatchingProviderFor(std::u8string_view filename, bool supports_create) {
         for (auto const& p: m_providers) {
             std::u8string_view exts = p->fileExtensions();
             // split extensions
@@ -83,7 +81,7 @@ public:
                 auto ext = exts.substr(it, it_end);
                 if (ext[0] == u8'*') {
                     ext = ext.substr(1);
-                    if (filename.ends_with(ext)) {
+                    if (filename.ends_with(ext) && (!supports_create || p->getCapabilities() == ProviderCapabilities::Full)) {
                         return p.get();
                     }
                 } else {
@@ -95,11 +93,15 @@ public:
         return nullptr;
     }
 
-    std::span<FileType const> fileTypes() const {
-        return m_fileTypes;
+    std::span<FileType const> fileTypesVerify() const {
+        return m_fileTypesVerify;
     }
 
-    ChecksumProvider* getProviderFromIndex(UINT provider_index) {
+    std::span<FileType const> fileTypesCreate() const {
+        return m_fileTypesCreate;
+    }
+
+    ChecksumProvider* getProviderFromIndex(size_t provider_index) {
         if ((provider_index >= 0) && (provider_index < m_providers.size())) {
             return m_providers[provider_index].get();
         }
@@ -125,13 +127,12 @@ public:
         do {
             HMODULE hmod = LoadLibrary(find_data.cFileName);
             if (hmod) {
-                QuickerSFV_LoadPluginFunc loader = (QuickerSFV_LoadPluginFunc)GetProcAddress(hmod, "QuickerSFV_LoadPlugin");
-                if (loader) {
-                    ChecksumProviderPtr p = quicker_sfv::gui::loadPlugin(loader);
-                    if (p) {
-                        addProvider(std::move(p));
-                    }
+                if (auto loader = (QuickerSFV_LoadPluginFunc)GetProcAddress(hmod, "QuickerSFV_LoadPlugin"); loader) {
+                    addProvider(quicker_sfv::gui::loadPlugin(loader));
+                } else if (auto loader_cpp = (QuickerSFV_LoadPluginCppFunc)GetProcAddress(hmod, "QuickerSFV_LoadPlugin_Cpp"); loader_cpp) {
+                    addProvider(quicker_sfv::gui::loadPluginCpp(loader_cpp));
                 }
+
             }
         } while (FindNextFile(hsearch, &find_data) != FALSE);
 #endif
@@ -139,7 +140,10 @@ public:
 
 private:
     void addProvider(ChecksumProviderPtr&& p) {
-        m_fileTypes.emplace_back(std::u8string(p->fileExtensions()), std::u8string(p->fileDescription()));
+        if (p->getCapabilities() == ProviderCapabilities::Full) {
+            m_fileTypesCreate.emplace_back(std::u8string(p->fileExtensions()), std::u8string(p->fileDescription()), m_providers.size());
+        }
+        m_fileTypesVerify.emplace_back(std::u8string(p->fileExtensions()), std::u8string(p->fileDescription()), m_providers.size());
         m_providers.emplace_back(std::move(p));
     }
 };
@@ -264,13 +268,13 @@ struct FileSpec {
     std::vector<std::u16string> stringPool;
 };
 
-FileSpec determineFileTypes(FileProviders const& file_providers, bool include_catchall) {
+FileSpec determineFileTypes(std::span<FileProviders::FileType const> const& file_types, bool include_catchall) {
     FileSpec ret;
     if (include_catchall) {
         ret.stringPool.push_back(u"File Verification Database");
         ret.stringPool.push_back(u"");
     }
-    for (auto const& f : file_providers.fileTypes()) {
+    for (auto const& f : file_types) {
         ret.stringPool.push_back(convertToUtf16(f.description));
         ret.stringPool.push_back(convertToUtf16(f.extensions));
         if (include_catchall) {
@@ -295,11 +299,11 @@ std::optional<gui::FileDialogResult> OpenFolder(HWND parent_window) {
 
 
 std::optional<gui::FileDialogResult> OpenFile(HWND parent_window, FileProviders const& file_providers) {
-    return gui::FileDialog(parent_window, gui::FileDialogAction::Open, nullptr, determineFileTypes(file_providers, true).fileTypes);
+    return gui::FileDialog(parent_window, gui::FileDialogAction::Open, nullptr, determineFileTypes(file_providers.fileTypesVerify(), true).fileTypes);
 }
 
 std::optional<gui::FileDialogResult> SaveFile(HWND parent_window, FileProviders const& file_providers) {
-    return gui::FileDialog(parent_window, gui::FileDialogAction::SaveAs, nullptr, determineFileTypes(file_providers, false).fileTypes);
+    return gui::FileDialog(parent_window, gui::FileDialogAction::SaveAs, nullptr, determineFileTypes(file_providers.fileTypesCreate(), false).fileTypes);
 }
 
 namespace {
@@ -412,9 +416,9 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 if (auto opt = OpenFile(hWnd, *m_fileProviders); opt) {
                     auto const& [source_file_path, selected_provider] = *opt;
                     ChecksumProvider* const checksum_provider =
-                        ((selected_provider == 0) || (selected_provider - 1 >= m_fileProviders->fileTypes().size())) ?
-                        m_fileProviders->getMatchingProviderFor(convertToUtf8(source_file_path)) :
-                        m_fileProviders->getProviderFromIndex(selected_provider - 1);
+                        ((selected_provider == 0) || (selected_provider - 1 >= m_fileProviders->fileTypesVerify().size())) ?
+                        m_fileProviders->getMatchingProviderFor(convertToUtf8(source_file_path), false) :
+                        m_fileProviders->getProviderFromIndex(m_fileProviders->fileTypesVerify()[selected_provider - 1].provider_index);
                     if (checksum_provider) {
                         m_scheduler->post(Operation::Verify{
                             .event_handler = this,
@@ -442,9 +446,9 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     if (auto const opt_s = SaveFile(hWnd, *m_fileProviders); opt_s) {
                         auto const& [target_file_path, selected_provider] = *opt_s;
                         ChecksumProvider* checksum_provider =
-                            (selected_provider >= m_fileProviders->fileTypes().size()) ?
-                            m_fileProviders->getMatchingProviderFor(convertToUtf8(target_file_path)) :
-                            m_fileProviders->getProviderFromIndex(selected_provider);
+                            (selected_provider >= m_fileProviders->fileTypesCreate().size()) ?
+                            m_fileProviders->getMatchingProviderFor(convertToUtf8(target_file_path), true) :
+                            m_fileProviders->getProviderFromIndex(m_fileProviders->fileTypesCreate()[selected_provider].provider_index);
                         m_scheduler->post(Operation::CreateFromFolder{
                             .event_handler = this,
                             .options = m_options,
@@ -1070,7 +1074,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
     scheduler.start();
 
     for (auto const& f : command_line_opts.filesToCheck) {
-        auto* p = file_providers.getMatchingProviderFor(convertToUtf8(f));
+        auto* p = file_providers.getMatchingProviderFor(convertToUtf8(f), false);
         if (!p) {
             auto const msg = formatString(1111, TEXT("Cannot determine format for filename: \"%s\""), f.c_str());
             MessageBox(main_window.getHwnd(), toWcharStr(msg), window_title, MB_ICONERROR | MB_OK);

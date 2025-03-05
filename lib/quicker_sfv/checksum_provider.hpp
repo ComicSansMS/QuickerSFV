@@ -23,6 +23,7 @@ struct HasherOptions {
 
 enum class ProviderCapabilities {
     Full,
+    VerifyOnly,
 };
 
 class ChecksumProvider {

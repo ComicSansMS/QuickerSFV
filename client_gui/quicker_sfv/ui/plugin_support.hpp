@@ -11,6 +11,8 @@ QuickerSFV_ChecksumProvider_Callbacks* pluginCallbacks();
 
 ChecksumProviderPtr loadPlugin(QuickerSFV_LoadPluginFunc plugin_load_function);
 
+ChecksumProviderPtr loadPluginCpp(QuickerSFV_LoadPluginCppFunc plugin_cpp_load_function);
+
 }
 
 #endif // QUICKER_SFV_BUILD_SELF_CONTAINED

@@ -62,6 +62,7 @@ if(NOT QUICKER_SFV_BUILD_SELF_CONTAINED)
         BASE_DIRS ${PROJECT_SOURCE_DIR}/plugin_sdk ${PROJECT_BINARY_DIR}/generated/plugin_sdk
         FILES
         ${PROJECT_SOURCE_DIR}/plugin_sdk/quicker_sfv/plugin/interfaces.h
+        ${PROJECT_SOURCE_DIR}/plugin_sdk/quicker_sfv/plugin/cpp_interfaces.hpp
         ${PROJECT_BINARY_DIR}/generated/plugin_sdk/quicker_sfv/plugin/plugin_sdk.h
     )
 endif(NOT QUICKER_SFV_BUILD_SELF_CONTAINED)
@@ -229,30 +230,61 @@ if(MSVC)
 endif(MSVC)
 
 option(BUILD_PLUGINS "" ON)
-if (BUILD_PLUGINS)
+if(QUICKER_SFV_BUILD_SELF_CONTAINED)
+    set(BUILD_PLUGINS OFF CACHE BOOL "No plugin support in self-contained build" FORCE)
+endif()
+if(BUILD_PLUGINS)
     include(GenerateExportHeader)
 
     if (OPENSSL_FOUND)
         option(BUILD_SHA1_PLUGIN "Build SHA1 plugin" ON)
-        add_library(quicker_sfv_sha1 SHARED)
-        generate_export_header(quicker_sfv_sha1
-            BASE_NAME QUICKER_SFV_PLUGIN_SHA1
-            EXPORT_FILE_NAME ${PROJECT_BINARY_DIR}/generated/plugins/quicker_sfv/sha1/sha1_export.h
+        if(BUILD_SHA1_PLUGIN)
+            add_library(quicker_sfv_sha1 SHARED)
+            generate_export_header(quicker_sfv_sha1
+                BASE_NAME QUICKER_SFV_PLUGIN_SHA1
+                EXPORT_FILE_NAME ${PROJECT_BINARY_DIR}/generated/plugins/quicker_sfv/sha1/sha1_export.h
+            )
+            target_sources(quicker_sfv_sha1
+                PRIVATE
+                ${PROJECT_SOURCE_DIR}/plugins/quicker_sfv/sha1/sha1_plugin.c
+                PRIVATE
+                FILE_SET HEADERS
+                BASE_DIRS ${PROJECT_BINARY_DIR}/generated/plugins
+                FILES
+                ${PROJECT_BINARY_DIR}/generated/plugins/quicker_sfv/sha1/sha1_export.h
+            )
+            target_compile_features(quicker_sfv_sha1 PRIVATE c_std_17)
+            target_compile_options(quicker_sfv_sha1 PRIVATE
+                $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
+                $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -pedantic>
+            )
+            target_link_libraries(quicker_sfv_sha1 PRIVATE quicker_sfv_plugin_sdk OpenSSL::Crypto)
+        endif(BUILD_SHA1_PLUGIN)
+    endif(OPENSSL_FOUND)
+
+    option(BUILD_RAR_PLUGIN "Build rar plugin" ON)
+    if(BUILD_RAR_PLUGIN)
+        add_library(quicker_sfv_rar SHARED)
+        generate_export_header(quicker_sfv_rar
+            BASE_NAME QUICKER_SFV_PLUGIN_RAR
+            EXPORT_FILE_NAME ${PROJECT_BINARY_DIR}/generated/plugins/quicker_sfv/rar/rar_export.h
         )
-        target_sources(quicker_sfv_sha1
+        target_sources(quicker_sfv_rar
             PRIVATE
-            ${PROJECT_SOURCE_DIR}/plugins/quicker_sfv/sha1/sha1_plugin.c
+            ${PROJECT_SOURCE_DIR}/plugins/quicker_sfv/rar/rar_plugin.cpp
+            ${PROJECT_SOURCE_DIR}/plugins/quicker_sfv/rar/rar_provider.cpp
             PRIVATE
             FILE_SET HEADERS
-            BASE_DIRS ${PROJECT_BINARY_DIR}/generated/plugins
+            BASE_DIRS ${PROJECT_BINARY_DIR}/generated/plugins ${PROJECT_SOURCE_DIR}/plugins/
             FILES
-            ${PROJECT_BINARY_DIR}/generated/plugins/quicker_sfv/sha1/sha1_export.h
+            ${PROJECT_BINARY_DIR}/generated/plugins/quicker_sfv/rar/rar_export.h
+            ${PROJECT_SOURCE_DIR}/plugins/quicker_sfv/rar/rar_provider.hpp
         )
-        target_compile_features(quicker_sfv_sha1 PRIVATE c_std_17)
-        target_compile_options(quicker_sfv_sha1 PRIVATE
+        target_compile_features(quicker_sfv_rar PRIVATE cxx_std_23)
+        target_compile_options(quicker_sfv_rar PRIVATE
             $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
             $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -pedantic>
         )
-        target_link_libraries(quicker_sfv_sha1 PRIVATE quicker_sfv_plugin_sdk OpenSSL::Crypto)
-    endif()
+        target_link_libraries(quicker_sfv_rar PRIVATE quicker_sfv_plugin_sdk quicker_sfv)
+    endif(BUILD_RAR_PLUGIN)
 endif()
