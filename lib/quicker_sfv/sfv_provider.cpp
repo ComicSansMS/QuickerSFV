@@ -27,10 +27,7 @@ std::u8string_view SfvProvider::fileDescription() const {
 }
 
 HasherPtr SfvProvider::createHasher(HasherOptions const& hasher_options) const {
-    if (hasher_options.has_avx512) {
-        return HasherPtr(new Crc32Hasher(Crc32UseAvx512_T{}));
-    }
-    return HasherPtr(new Crc32Hasher());
+    return HasherPtr(new Crc32Hasher(hasher_options));
 }
 
 Digest SfvProvider::digestFromString(std::u8string_view str) const {

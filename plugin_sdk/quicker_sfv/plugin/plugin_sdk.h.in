@@ -8,10 +8,13 @@
 #endif
 
 #include <quicker_sfv/plugin/interfaces.h>
-#ifdef __cplusplus
-#   include <quicker_sfv/plugin/cpp_interfaces.hpp>
-#endif
 
 typedef IQuickerSFV_ChecksumProvider* (*QuickerSFV_LoadPluginFunc)(QuickerSFV_ChecksumProvider_Callbacks*);
+
+#ifdef __cplusplus
+#   include <quicker_sfv/plugin/cpp_interfaces.hpp>
+
+    typedef void (*QuickerSFV_LoadPluginCppFunc)(QuickerSFV_CppPluginLoader**);
+#endif
 
 #endif

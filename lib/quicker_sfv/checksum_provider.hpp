@@ -16,11 +16,6 @@ class ChecksumProvider;
 using HasherPtr = std::unique_ptr<Hasher>;
 using ChecksumProviderPtr = std::unique_ptr<ChecksumProvider>;
 
-struct HasherOptions {
-    bool has_sse42;
-    bool has_avx512;
-};
-
 enum class ProviderCapabilities {
     Full,
     VerifyOnly,

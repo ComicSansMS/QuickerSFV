@@ -9,6 +9,11 @@
 
 namespace quicker_sfv {
 
+struct HasherOptions {
+    bool has_sse42;
+    bool has_avx512;
+};
+
 class Hasher {
 public:
     virtual ~Hasher() = 0;

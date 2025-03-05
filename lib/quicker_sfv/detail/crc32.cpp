@@ -45,12 +45,8 @@ std::u8string CrcDigest::toString() const {
 
 } // anonymous namespace
 
-Crc32Hasher::Crc32Hasher()
-    :m_state(0), m_useAvx512(false)
-{}
-
-Crc32Hasher::Crc32Hasher(Crc32UseAvx512_T)
-    :m_state(0), m_useAvx512(true)
+Crc32Hasher::Crc32Hasher(HasherOptions const& opt)
+    :m_state(0), m_useAvx512(opt.has_avx512)
 {}
 
 Crc32Hasher::~Crc32Hasher() = default;
@@ -79,6 +75,11 @@ Digest Crc32Hasher::digestFromString(std::u8string_view str) {
         (conv(str[2], str[3]) << 16) |
         (conv(str[4], str[5]) << 8) |
         conv(str[6], str[7]);
+    return CrcDigest{ d };
+}
+
+/* static */
+Digest Crc32Hasher::digestFromRaw(uint32_t d) {
     return CrcDigest{ d };
 }
 

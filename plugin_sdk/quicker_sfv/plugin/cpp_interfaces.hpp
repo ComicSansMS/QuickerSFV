@@ -13,6 +13,5 @@ struct QuickerSFV_CppPluginLoader {
     virtual quicker_sfv::ChecksumProviderPtr createChecksumProvider() const = 0;
 };
 
-
 #endif
 #endif
