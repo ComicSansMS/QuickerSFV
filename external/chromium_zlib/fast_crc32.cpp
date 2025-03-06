@@ -139,9 +139,7 @@ bool supportsAvx512() {
     check_cpuid(1, data);
     bool const avx = (data[2] & 0x1000'0000) != 0;
     bool const pclmulqdq = (data[2] & 0x0000'0002) != 0;
-    if (!(avx && pclmulqdq)) {
-        return false;
-    }
+    if (!(avx && pclmulqdq)) { return false; }
     check_cpuid(7, data);
     bool const avx512f = (data[1] & 0x0001'0000) != 0;
     bool const vpclmulqdq = (data[2] & 0x0000'0400) != 0;
