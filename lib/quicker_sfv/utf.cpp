@@ -1,5 +1,6 @@
 #include <quicker_sfv/utf.hpp>
 
+#include <cassert>
 #include <span>
 
 namespace quicker_sfv {
@@ -35,9 +36,7 @@ DecodeResult decodeUtf16(std::span<char16_t const> range) {
                 acc += 0x0001'0000;
                 return DecodeResult{ .code_units_consumed = 2, .code_point = acc };
             }
-            return error;
-        } break;
-        default: return error;
+        } return error;
         }
     }
     return error;
@@ -78,10 +77,9 @@ DecodeResult decodeUtf16_non_strict(std::span<char16_t const> range) {
             // technically a decoding error, but we treat it like a single character
             return DecodeResult{ .code_units_consumed = 1, .code_point = static_cast<char32_t>(range[i - 1]) };
         } break;
-        default: return error;
         }
     }
-    return error;
+    return (range.empty()) ? error : DecodeResult{ .code_units_consumed = 1, .code_point = static_cast<char32_t>(range[0]) };
 }
 
 
@@ -162,7 +160,6 @@ DecodeResult decodeUtf8(std::span<char8_t const> range) {
             acc = add_multi_byte(acc, b);
             state = State::Awaiting2Bytes;
         } break;
-        default: return error;
         }
     }
     return error;
@@ -196,16 +193,30 @@ Utf8Encode encodeUtf32ToUtf8(char32_t c) {
 
 bool checkValidUtf8(std::span<std::byte const> range) {
     std::span<char8_t const> u8range(reinterpret_cast<char8_t const*>(range.data()), range.size());
-    for (;;) {
-        if (u8range.empty()) { return true; }
+    while (!u8range.empty()) {
         DecodeResult const r = decodeUtf8(u8range);
         if (r.code_units_consumed == 0) { return false; }
         u8range = u8range.subspan(r.code_units_consumed);
     }
+    return true;
 }
 
 bool checkValidUtf8(std::string_view str) {
     return checkValidUtf8(std::span<std::byte const>(reinterpret_cast<std::byte const*>(str.data()), str.size()));
+}
+
+bool checkValidUtf16(std::span<wchar_t const> range) {
+    std::span<char16_t const> u16range(reinterpret_cast<char16_t const*>(range.data()), range.size());
+    while (!u16range.empty()) {
+        DecodeResult const r = decodeUtf16(u16range);
+        if (r.code_units_consumed == 0) { return false; }
+        u16range = u16range.subspan(r.code_units_consumed);
+    }
+    return true;
+}
+
+bool checkValidUtf16(std::wstring_view str) {
+    return checkValidUtf16(std::span<wchar_t const>(str.begin(), str.end()));
 }
 
 std::u8string assumeUtf8(std::string_view str) {
@@ -219,6 +230,7 @@ std::u8string convertToUtf8(std::u16string_view str) {
     std::u8string ret;
     while (!str.empty()) {
         auto const decode_result = decodeUtf16(str);
+        assert(decode_result.code_units_consumed != 0);
         str = str.substr(decode_result.code_units_consumed);
         auto const utf8_encode = encodeUtf32ToUtf8(decode_result.code_point);
         ret.append(utf8_encode.encode, utf8_encode.number_of_code_units);
@@ -230,15 +242,12 @@ std::u16string convertToUtf16(std::u8string_view str) {
     std::u16string ret;
     while (!str.empty()) {
         auto const decode_result = decodeUtf8(str);
+        assert(decode_result.code_units_consumed != 0);
         str = str.substr(decode_result.code_units_consumed);
         auto const utf16_encode = encodeUtf32ToUtf16(decode_result.code_point);
         ret.append(utf16_encode.encode, utf16_encode.number_of_code_units);
     }
     return ret;
-}
-
-std::wstring convertToWstring(std::u8string_view str) {
-    return std::wstring(reinterpret_cast<wchar_t const*>(convertToUtf16(str).c_str()));
 }
 
 }
