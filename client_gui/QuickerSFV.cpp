@@ -253,7 +253,8 @@ MainWindow::MainWindow(FileProviders& file_providers, OperationScheduler& schedu
     :m_hInstance(nullptr), m_windowTitle(nullptr), m_hWnd(nullptr), m_hMenu(nullptr), m_hTextFieldLeft(nullptr),
      m_hTextFieldRight(nullptr), m_hListView(nullptr), m_imageList(nullptr), m_hPopupMenu(nullptr),
      m_stats{}, m_listSort{ .sort_column = 0, .order = ListViewSort::Order::Original },
-     m_options{ .has_sse42 = true, .has_avx512 = false}, m_fileProviders(&file_providers), m_scheduler(&scheduler)
+     m_options{ .has_sse42 = quicker_sfv::supportsSse42(), .has_avx512 = false},
+     m_fileProviders(&file_providers), m_scheduler(&scheduler)
 {
 }
 

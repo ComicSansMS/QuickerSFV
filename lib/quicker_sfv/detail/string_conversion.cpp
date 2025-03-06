@@ -2,6 +2,8 @@
 
 #include <quicker_sfv/error.hpp>
 
+#include <assert.h>
+
 namespace quicker_sfv::string_conversion {
 
 namespace {
@@ -20,12 +22,11 @@ std::byte hex_char_to_nibble(char8_t x) {
 
 char8_t nibble_to_hex_char(std::byte b) {
     char8_t c = static_cast<char8_t>(b);
+    assert((c >= 0) && (c < 16));
     if (c < 10) {
         return c + u8'0';
-    } else if (c < 16) {
-        return c - 10 + u8'a';
     } else {
-        throwException(Error::ParserError);
+        return c - 10 + u8'a';
     }
 }
 

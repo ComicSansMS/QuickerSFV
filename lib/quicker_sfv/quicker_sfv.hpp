@@ -16,6 +16,13 @@
  */
 namespace quicker_sfv {
 
+/** Checks whether the CPU supports the SSE4.2 instruction set.
+ * @note This is always true for x64 CPUs.
+ */
+bool supportsSse42();
+
+/** Checks whether the CPU supports the AVX512 instruction set.
+ */
 bool supportsAvx512();
 
 }
