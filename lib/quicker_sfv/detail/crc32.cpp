@@ -6,7 +6,7 @@
 
 #include <fast_crc32.hpp>
 
-namespace quicker_sfv {
+namespace quicker_sfv::detail {
 
 namespace {
 struct CrcDigest {
@@ -81,10 +81,6 @@ Digest Crc32Hasher::digestFromString(std::u8string_view str) {
 /* static */
 Digest Crc32Hasher::digestFromRaw(uint32_t d) {
     return CrcDigest{ d };
-}
-
-/* static */ bool Crc32Hasher::checkType(Digest const& d) {
-    return d.checkType(typeid(CrcDigest));
 }
 
 }

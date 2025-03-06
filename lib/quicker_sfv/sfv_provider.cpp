@@ -27,11 +27,11 @@ std::u8string_view SfvProvider::fileDescription() const {
 }
 
 HasherPtr SfvProvider::createHasher(HasherOptions const& hasher_options) const {
-    return HasherPtr(new Crc32Hasher(hasher_options));
+    return HasherPtr(new detail::Crc32Hasher(hasher_options));
 }
 
 Digest SfvProvider::digestFromString(std::u8string_view str) const {
-    return Crc32Hasher::digestFromString(str);
+    return detail::Crc32Hasher::digestFromString(str);
 }
 
 ChecksumFile SfvProvider::readFromFile(FileInput& file_input) const {
@@ -53,7 +53,7 @@ ChecksumFile SfvProvider::readFromFile(FileInput& file_input) const {
         std::size_t const separator_idx = line.size() - 8;
         if ((line[separator_idx - 1] != u8' ')) { throwException(Error::ParserError); }
         std::u8string_view filepath_sv = line.substr(0, separator_idx - 1);
-        ret.addEntry(filepath_sv, Crc32Hasher::digestFromString(line.substr(separator_idx))
+        ret.addEntry(filepath_sv, detail::Crc32Hasher::digestFromString(line.substr(separator_idx))
         );
     }
     return ret;

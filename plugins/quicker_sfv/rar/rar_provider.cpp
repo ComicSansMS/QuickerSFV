@@ -130,7 +130,7 @@ RarFileHeader parseHeader(FileInput& fi) {
 
 class RarHasher : public Hasher {
 private:
-    Crc32Hasher m_crcHasher;
+    detail::Crc32Hasher m_crcHasher;
 public:
     explicit RarHasher(HasherOptions const& hasher_options)
         :m_crcHasher(hasher_options)
@@ -167,7 +167,7 @@ HasherPtr RarProvider::createHasher(HasherOptions const& hasher_options) const {
 }
 
 Digest RarProvider::digestFromString(std::u8string_view str) const {
-    return Crc32Hasher::digestFromString(str);
+    return detail::Crc32Hasher::digestFromString(str);
 }
 
 ChecksumFile RarProvider::readFromFile(FileInput& file_input) const {
@@ -179,12 +179,12 @@ ChecksumFile RarProvider::readFromFile(FileInput& file_input) const {
     }
     fi.reset();
     RarFileHeader header = parseHeader(fi);
-    Crc32Hasher hasher(HasherOptions{});
+    detail::Crc32Hasher hasher(HasherOptions{});
     hasher.reset();
     // hash header contents (skipping the crc itself, which is not part of the hash)
     hasher.addData(std::span<std::byte const>(fi.data().begin() + sizeof(header.crc32), fi.data().end()));
     Digest const header_digest = hasher.finalize();
-    if (header_digest != Crc32Hasher::digestFromRaw(header.crc32)) {
+    if (header_digest != detail::Crc32Hasher::digestFromRaw(header.crc32)) {
         throwException(Error::ParserError);
     }
     return {};

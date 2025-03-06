@@ -19,7 +19,7 @@
 #   endif
 #endif
 
-namespace quicker_sfv {
+namespace quicker_sfv::detail {
 namespace {
 struct MD5Digest {
     std::byte data[16];
@@ -102,11 +102,6 @@ void MD5Hasher::reset() {
 /* static */
 Digest MD5Hasher::digestFromString(std::u8string_view str) {
     return MD5Digest::fromString(str);
-}
-
-/* static */
-bool MD5Hasher::checkType(Digest const& d) {
-    return d.checkType(typeid(MD5Digest));
 }
 
 }

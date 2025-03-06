@@ -7,11 +7,21 @@
 
 namespace quicker_sfv {
 
+/** Specifies that a type can be used as a digest.
+ */
 template<typename T>
 concept IsDigest = std::regular<T> && requires(T const d) {
     { d.toString() } -> std::same_as<std::u8string>;
 };
 
+/** Type-erased container for checksum digest.
+ * A checksum digest is provided either by a Hasher or parsed from a string
+ * using ChecksumProvider::digestFromString().
+ * Digest is a polymorphic type that can store arbitrary digests, but behaves like a
+ * value type itself, that is, it can be copied and assigned like any `int` value.
+ * Two Digests will only compare equal if they are of the same underlying dynamic
+ * type.
+ */
 class Digest {
 private:
     class Concept {
@@ -59,11 +69,19 @@ private:
 
     std::unique_ptr<Concept> m_digest;
 public:
+    /** Constructor.
+     * A Digest can store objects of any type that fulfills the IsDigest concept.
+     * @param[in] digest The object to be stored.
+     */
     template<typename T> requires( !std::is_same_v<std::remove_cvref_t<T>, Digest> ) && IsDigest<T>
     Digest(T&& digest)
         :m_digest(std::make_unique<Model<std::remove_cvref_t<T>>>(std::forward<T>(digest)))
     {}
 
+    /** Default constructor.
+     * Constructs an empty Digest value.
+     * Empty Digests are only equal to other empty Digests.
+     */
     Digest();
     ~Digest();
     Digest(Digest const& rhs);
@@ -71,9 +89,13 @@ public:
     Digest(Digest&& rhs);
     Digest& operator=(Digest&& rhs);
 
+    /** Retrieves a string representation of the current Digest.
+     * @note String representations are not required to be unique. Two Digests with
+     *       the same string representation do not necessarily compare equal. However,
+     *       the string representation is deterministic. Two Digests that compare
+     *       equal must return the same string representation.
+     */
     [[nodiscard]] std::u8string toString() const;
-
-    bool checkType(std::type_info const& ti) const;
 
     friend bool operator==(Digest const& lhs, Digest const& rhs);
     friend bool operator!=(Digest const& lhs, Digest const& rhs);

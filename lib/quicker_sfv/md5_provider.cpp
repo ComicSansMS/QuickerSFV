@@ -29,11 +29,11 @@ std::u8string_view MD5Provider::fileDescription() const {
 }
 
 HasherPtr MD5Provider::createHasher(HasherOptions const&) const {
-    return std::make_unique<MD5Hasher>();
+    return std::make_unique<detail::MD5Hasher>();
 }
 
 Digest MD5Provider::digestFromString(std::u8string_view str) const {
-    return MD5Hasher::digestFromString(str);
+    return detail::MD5Hasher::digestFromString(str);
 }
 
 ChecksumFile MD5Provider::readFromFile(FileInput& file_input) const {
@@ -54,7 +54,7 @@ ChecksumFile MD5Provider::readFromFile(FileInput& file_input) const {
         if (separator_idx == std::string::npos) { throwException(Error::ParserError); }
         if ((separator_idx == 0) || (line[separator_idx - 1] != u8' ')) { throwException(Error::ParserError); }
         std::u8string_view filepath_sv = line.substr(separator_idx + 1);
-        ret.addEntry(filepath_sv, MD5Hasher::digestFromString(line.substr(0, separator_idx - 1)));
+        ret.addEntry(filepath_sv, detail::MD5Hasher::digestFromString(line.substr(0, separator_idx - 1)));
     }
     return ret;
 }

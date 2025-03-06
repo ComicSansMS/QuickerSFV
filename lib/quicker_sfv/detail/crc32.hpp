@@ -5,8 +5,11 @@
 
 #include <cstdint>
 
-namespace quicker_sfv {
+namespace quicker_sfv::detail {
 
+/** CRC32 Hasher.
+ * Hasher for the CRC32 checksum (CRC-32/ISO-HDLC) algorithm.
+ */
 class Crc32Hasher: public Hasher {
 private:
     uint32_t m_state;
@@ -20,7 +23,6 @@ public:
     void reset() override;
     static Digest digestFromString(std::u8string_view str);
     static Digest digestFromRaw(uint32_t d);
-    static bool checkType(Digest const& d);
 };
 
 }

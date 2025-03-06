@@ -6,7 +6,7 @@
 #include <memory>
 #include <span>
 
-namespace quicker_sfv {
+namespace quicker_sfv::detail {
 
 class MD5Hasher: public Hasher {
 private:
@@ -20,7 +20,6 @@ public:
     Digest finalize() override;
     void reset() override;
     static Digest digestFromString(std::u8string_view str);
-    static bool checkType(Digest const& d);
 };
 
 }
