@@ -10,6 +10,8 @@ if(GENERATE_COVERAGE_INFO)
         endif()
         add_compile_options(--coverage)
         add_compile_options(-fprofile-abs-path)
+        add_compile_options(-fno-elide-constructors)
+        add_compile_options(-fno-default-inline)
         link_libraries(--coverage)
         add_custom_target(coverage_html
             COMMAND ${CMAKE_COMMAND} -E make_directory coverage
