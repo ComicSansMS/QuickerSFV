@@ -30,7 +30,6 @@ private:
         virtual std::unique_ptr<Concept> clone() const = 0;
         virtual std::u8string toString() const = 0;
         virtual bool equalTo(Concept const& rhs) const = 0;
-        virtual std::type_info const& getType() const = 0;
     };
 
     template<IsDigest T>
@@ -60,10 +59,6 @@ private:
             Model const* mrhs = dynamic_cast<Model const*>(&rhs);
             if (!mrhs) { return false; }
             return m_ == (mrhs->m_);
-        }
-
-        std::type_info const& getType() const override {
-            return typeid(T);
         }
     };
 

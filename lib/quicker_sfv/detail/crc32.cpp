@@ -10,11 +10,7 @@ namespace quicker_sfv::detail {
 
 namespace {
 struct CrcDigest {
-    uint32_t data;
-
-    CrcDigest();
-
-    explicit CrcDigest(uint32_t d);
+    uint32_t data = 0;
 
     std::u8string toString() const;
 
@@ -22,14 +18,6 @@ struct CrcDigest {
 };
 
 static_assert(IsDigest<CrcDigest>, "CrcDigest is not a digest");
-
-CrcDigest::CrcDigest()
-    :data(0)
-{ }
-
-CrcDigest::CrcDigest(uint32_t d)
-    :data(d)
-{ }
 
 std::u8string CrcDigest::toString() const {
     std::u8string ret;

@@ -158,6 +158,7 @@ if(BUILD_TESTS)
         PRIVATE
         ${PROJECT_SOURCE_DIR}/test/checksum_file.t.cpp
         ${PROJECT_SOURCE_DIR}/test/crc32.t.cpp
+        ${PROJECT_SOURCE_DIR}/test/error.t.cpp
         ${PROJECT_SOURCE_DIR}/test/fast_crc32.t.cpp
         ${PROJECT_SOURCE_DIR}/test/line_reader.t.cpp
         ${PROJECT_SOURCE_DIR}/test/utf.t.cpp
