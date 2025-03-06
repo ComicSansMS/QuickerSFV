@@ -73,7 +73,7 @@ typedef struct tag_Digest_UserData {
     unsigned char digest[SHA_DIGEST_LENGTH];
 } Digest_UserData;
 
-static Digest_UserData* createDigestUserData() {
+static Digest_UserData* createDigestUserData(void) {
     Digest_UserData* user_data = malloc(sizeof(Digest_UserData));
     if (!user_data) { return NULL; }
     memcpy(&user_data->guid, &DIGEST_GUID, sizeof(QuickerSFV_GUID));
@@ -325,7 +325,7 @@ static QuickerSFV_Result IQuickerSFV_ChecksumProvider_WriteNewFile(IQuickerSFV_C
     return (res == QuickerSFV_CallbackResult_Ok) ? QuickerSFV_Result_OK : QuickerSFV_Result_Failed;
 }
 
-static void init_vtables() {
+static void init_vtables(void) {
     g_HasherVtbl.AddData = IQuickerSFV_Hasher_AddData;
     g_HasherVtbl.Finalize = IQuickerSFV_Hasher_Finalize;
     g_HasherVtbl.Reset = IQuickerSFV_Hasher_Reset;
