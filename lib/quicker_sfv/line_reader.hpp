@@ -10,6 +10,8 @@
 namespace quicker_sfv {
 
 class LineReader {
+public:
+    static constexpr size_t const READ_BUFFER_SIZE = 64 << 10;
 private:
     quicker_sfv::FileInput* m_fileIn;
     size_t m_bufferOffset;

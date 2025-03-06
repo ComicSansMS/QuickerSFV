@@ -134,6 +134,7 @@ if(BUILD_TESTS)
     add_executable(quicker_sfv_test)
     target_sources(quicker_sfv_test
         PRIVATE
+        ${PROJECT_SOURCE_DIR}/test/line_reader.t.cpp
         ${PROJECT_SOURCE_DIR}/test/utf.t.cpp
     )
     target_link_libraries(quicker_sfv_test PRIVATE quicker_sfv Catch2)

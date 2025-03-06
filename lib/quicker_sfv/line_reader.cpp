@@ -4,10 +4,9 @@
 #include <quicker_sfv/utf.hpp>
 
 #include <algorithm>
+#include <cassert>
 
 namespace quicker_sfv {
-
-inline constexpr size_t const READ_BUFFER_SIZE = 64 << 10;
 
 LineReader::LineReader(quicker_sfv::FileInput& file_input) noexcept
     :m_fileIn(&file_input), m_bufferOffset(0), m_fileOffset(0), m_eof(false),
@@ -16,8 +15,7 @@ LineReader::LineReader(quicker_sfv::FileInput& file_input) noexcept
 }
 
 bool LineReader::read_more() {
-    if (m_bufferOffset < READ_BUFFER_SIZE) { return false; }
-    if (m_eof) { return false; }
+    assert(!m_eof && (m_bufferOffset >= READ_BUFFER_SIZE));
     m_bufferOffset -= READ_BUFFER_SIZE;
     std::swap(m_buffers.front, m_buffers.back);
     size_t const bytes_read = m_fileIn->read(m_buffers.back);
@@ -41,10 +39,10 @@ std::optional<std::u8string> LineReader::read_line() {
     if (m_fileOffset == 0) {
         // initial read
         m_bufferOffset += READ_BUFFER_SIZE;
-        if (!read_more()) { return std::nullopt; }
+        read_more();
         if (!m_eof) {
             m_bufferOffset += READ_BUFFER_SIZE;
-            if (!read_more()) { return std::nullopt; }
+            read_more();
         } else {
             std::swap(m_buffers.front, m_buffers.back);
             m_buffers.back.clear();
@@ -57,35 +55,39 @@ std::optional<std::u8string> LineReader::read_line() {
     if (it == end(m_buffers.front)) {
         // read spans buffers
         it = std::find(begin(m_buffers.back), end(m_buffers.back), newline);
-        if ((it == end(m_buffers.back)) && (!m_eof)) { return std::nullopt; }
+        if ((it == end(m_buffers.back)) && (!m_eof)) {
+            // no newline in either buffer; assume invalid file
+            return std::nullopt;
+        }
         std::span<std::byte> front_range(it_begin, end(m_buffers.front));
         std::span<std::byte> back_range(begin(m_buffers.back), it);
         std::vector<std::byte> buffer;
+        buffer.reserve(front_range.size() + back_range.size());
         buffer.insert(end(buffer), begin(front_range), end(front_range));
         buffer.insert(end(buffer), begin(back_range), end(back_range));
-        if (!quicker_sfv::checkValidUtf8(buffer)) {
-            throwException(Error::ParserError);
-        }
         m_bufferOffset += buffer.size() + 1;
         if (!m_eof) {
-            if (!read_more()) {
-                throwException(Error::FileIO);
-            }
+            read_more();
         } else if (!m_buffers.back.empty()) {
             std::swap(m_buffers.front, m_buffers.back);
             m_buffers.back.clear();
             m_bufferOffset -= READ_BUFFER_SIZE;
         }
-        if (!buffer.empty() && (buffer.back() == carriage_return)) { buffer.pop_back(); }
+        if (!buffer.empty() && (buffer.back() == carriage_return)) {
+            buffer.pop_back();
+        }
+        if (!quicker_sfv::checkValidUtf8(buffer)) {
+            throwException(Error::ParserError);
+        }
         return std::u8string(reinterpret_cast<char8_t const*>(buffer.data()), reinterpret_cast<char8_t const*>(buffer.data() + buffer.size()));
     } else {
         // line is fully contained within front buffer
         m_bufferOffset += std::distance(it_begin, it) + 1;
         std::span<std::byte> line_range{ it_begin, it };
-        if (!quicker_sfv::checkValidUtf8(line_range)) {
-            return std::nullopt;
-        }
         if (!line_range.empty() && (line_range.back() == carriage_return)) { line_range = line_range.subspan(0, line_range.size() - 1); }
+        if (!quicker_sfv::checkValidUtf8(line_range)) {
+            throwException(Error::ParserError);
+        }
         return std::u8string(reinterpret_cast<char8_t const*>(line_range.data()),
             reinterpret_cast<char8_t const*>(line_range.data() + line_range.size()));
     }
