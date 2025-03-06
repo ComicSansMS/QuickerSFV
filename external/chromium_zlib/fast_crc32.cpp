@@ -84,10 +84,10 @@ void check_cpuid(int function_id, int32_t (&data)[4]) {
     __get_cpuid(0, &max_level, &t2, &t3, &t4);
     if (max_level < static_cast<uint32_t>(function_id)) { data[0] = 0; data[1] = 0; data[2] = 0; data[3] = 0; return; }
     __get_cpuid(function_id,
-            reinterpret_cast<uint32_t*>(data[0]),
-            reinterpret_cast<uint32_t*>(data[1]),
-            reinterpret_cast<uint32_t*>(data[2]),
-            reinterpret_cast<uint32_t*>(data[3])
+            reinterpret_cast<uint32_t*>(&data[0]),
+            reinterpret_cast<uint32_t*>(&data[1]),
+            reinterpret_cast<uint32_t*>(&data[2]),
+            reinterpret_cast<uint32_t*>(&data[3])
         );
 #endif
 }
