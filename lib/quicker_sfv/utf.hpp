@@ -97,14 +97,16 @@ bool checkValidUtf8(std::span<std::byte const> range);
  */
 bool checkValidUtf8(std::string_view str);
 
-/** Checks whether a wchar_t range contains a valid UTF-16 encoded string.
+/** Checks whether a wchar_t range contains a valid UTF-16/UTF-32 encoded string.
  * The empty string is considered valid.
+ * @note Depending on the platform, wchar_t can be 2 or 4 bytes in size.
  */
-bool checkValidUtf16(std::span<wchar_t const> range);
+bool checkValidUtfWideString(std::span<wchar_t const> range);
 /** Checks whether a wstring_view contains a valid UTF-16 encoded string.
  * The empty string is considered valid.
+ * * @note Depending on the platform, wchar_t can be 2 or 4 bytes in size.
  */
-bool checkValidUtf16(std::wstring_view str);
+bool checkValidUtfWideString(std::wstring_view str);
 
 /** Creates a u8string from a string_view without validating the encoding.
  * @pre `checkValidUtf8(str) == true`.
@@ -113,12 +115,12 @@ bool checkValidUtf16(std::wstring_view str);
 std::u8string assumeUtf8(std::string_view str);
 
 /** Converts a UTF-16 string to UTF-8.
- * @pre `checkValidUtf16(str) == true`
+ * @pre str must contain a valid UTF-16 encoded string.
  */
 std::u8string convertToUtf8(std::u16string_view str);
 
 /** Converts a UTF-8 string to UTF-16.
- * @pre `checkValidUtf8(str) == true`
+ * @pre str must contain a valid UTF-8 encoded string.
  */
 std::u16string convertToUtf16(std::u8string_view str);
 

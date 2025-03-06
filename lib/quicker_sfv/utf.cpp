@@ -205,18 +205,27 @@ bool checkValidUtf8(std::string_view str) {
     return checkValidUtf8(std::span<std::byte const>(reinterpret_cast<std::byte const*>(str.data()), str.size()));
 }
 
-bool checkValidUtf16(std::span<wchar_t const> range) {
-    std::span<char16_t const> u16range(reinterpret_cast<char16_t const*>(range.data()), range.size());
-    while (!u16range.empty()) {
-        DecodeResult const r = decodeUtf16(u16range);
-        if (r.code_units_consumed == 0) { return false; }
-        u16range = u16range.subspan(r.code_units_consumed);
+bool checkValidUtfWideString(std::span<wchar_t const> range) {
+    static_assert((sizeof(wchar_t) == 2) || (sizeof(wchar_t) == 4), "Unexpected wchar_t size");
+    if constexpr (sizeof(wchar_t) == 4) {
+        std::span<char32_t const> u32range(reinterpret_cast<char32_t const*>(range.data()), range.size());
+        for (auto const& c : u32range) {
+            if (encodeUtf32ToUtf8(c).number_of_code_units == 0) { return false; }
+        }
+        return true;
+    } else if constexpr (sizeof(wchar_t) == 2) {
+        std::span<char16_t const> u16range(reinterpret_cast<char16_t const*>(range.data()), range.size());
+        while (!u16range.empty()) {
+            DecodeResult const r = decodeUtf16(u16range);
+            if (r.code_units_consumed == 0) { return false; }
+            u16range = u16range.subspan(r.code_units_consumed);
+        }
+        return true;
     }
-    return true;
 }
 
-bool checkValidUtf16(std::wstring_view str) {
-    return checkValidUtf16(std::span<wchar_t const>(str.begin(), str.end()));
+bool checkValidUtfWideString(std::wstring_view str) {
+    return checkValidUtfWideString(std::span<wchar_t const>(str.begin(), str.end()));
 }
 
 std::u8string assumeUtf8(std::string_view str) {

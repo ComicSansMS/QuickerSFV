@@ -130,6 +130,9 @@ TEST_CASE("Unicode")
         CHECK(decodeUtf8(dangling_4byte_3h) == DecodeResult{ .code_units_consumed = 0, .code_point = 0 });
         char8_t dangling_4byte_3e[] = { 0xf0, 0x80, 0x80 };
         CHECK(decodeUtf8(dangling_4byte_3e) == DecodeResult{ .code_units_consumed = 0, .code_point = 0 });
+
+        char8_t invalid_header[] = { 0xf8, 0x80, 0x80 };
+        CHECK(decodeUtf8(invalid_header) == DecodeResult{ .code_units_consumed = 0, .code_point = 0 });
     }
     SECTION("Utf16 Decode") {
         using quicker_sfv::decodeUtf16;
@@ -267,19 +270,30 @@ TEST_CASE("Unicode")
         };
         CHECK(assumeUtf8(reinterpret_cast<char const*>(u_special_characters)) == u8"A¡ࠀ🍫嶲Z");
     }
-    SECTION("Check valid Utf16") {
-        using quicker_sfv::checkValidUtf16;
-        CHECK(checkValidUtf16(std::wstring_view{}));
-        CHECK(checkValidUtf16(std::wstring_view(L"")));
-        CHECK(checkValidUtf16(std::wstring_view(L"hello there! this is just some harmless text")));
+    SECTION("Check valid Utf wide string") {
+        using quicker_sfv::checkValidUtfWideString;
+        CHECK(checkValidUtfWideString(std::wstring_view{}));
+        CHECK(checkValidUtfWideString(std::wstring_view(L"")));
+        CHECK(checkValidUtfWideString(std::wstring_view(L"hello there! this is just some harmless text")));
         wchar_t const u_special_characters[] = {
             L'A', 0x2048, 0xd83c, 0xdf6b, L'Z', L'\0'
         };
-        CHECK(checkValidUtf16(std::wstring_view(u_special_characters)));
-        wchar_t const u_bogus_values[] = {
-            'A', 0xdfff, 'B', 'X', '~', 'Z', '\0'
-        };
-        CHECK_FALSE(checkValidUtf16(std::wstring_view(u_bogus_values)));
+        CHECK(checkValidUtfWideString(std::wstring_view(u_special_characters)));
+        if constexpr (sizeof(wchar_t) == 4) {
+#ifdef _MSC_VER
+            CHECK(false);
+#else
+            wchar_t const u_bogus_values[] = {
+                'A', 0x110000, 'B', 'X', '~', 'Z', '\0'
+            };
+            CHECK_FALSE(checkValidUtfWideString(std::wstring_view(u_bogus_values)));
+#endif
+        } else if constexpr (sizeof(wchar_t) == 2) {
+            wchar_t const u_bogus_values[] = {
+                'A', 0xdfff, 'B', 'X', '~', 'Z', '\0'
+            };
+            CHECK_FALSE(checkValidUtfWideString(std::wstring_view(u_bogus_values)));
+        }
     }
 
     SECTION("Convert Utf16 to Utf8") {
