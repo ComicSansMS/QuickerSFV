@@ -173,6 +173,10 @@ Digest RarProvider::digestFromString(std::u8string_view str) const {
 ChecksumFile RarProvider::readFromFile(FileInput& file_input) const {
     CollectingFileInput fi(file_input);
     FileType ft = seekSignature(fi);
+    if (ft != FileType::Rar5) {
+        // Rar4 not supported for now
+        throwException(Error::ParserError);
+    }
     fi.reset();
     RarFileHeader header = parseHeader(fi);
     Crc32Hasher hasher(HasherOptions{});

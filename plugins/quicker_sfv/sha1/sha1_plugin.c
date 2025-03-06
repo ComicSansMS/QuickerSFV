@@ -292,7 +292,7 @@ static QuickerSFV_Result IQuickerSFV_ChecksumProvider_WriteNewFile(IQuickerSFV_C
         QuickerSFV_CallbackResult (*next_entry)(
             QuickerSFV_FileWriteProviderP write_provider,
             char const** out_filename,
-            void** out_digest
+            char const** out_digest
         )
     )
 {
@@ -312,7 +312,11 @@ static QuickerSFV_Result IQuickerSFV_ChecksumProvider_WriteNewFile(IQuickerSFV_C
             if (!write_buffer) { return QuickerSFV_Result_InsufficientMemory; }
             write_buffer_size = required_size * 2;
         }
+#ifdef _MSC_VER
         bytes_formatted = sprintf_s(write_buffer, write_buffer_size, "%s *%s\r\n", digest, filename);
+#else
+        bytes_formatted = sprintf(write_buffer, "%s *%s\r\n", digest, filename);
+#endif
         if (bytes_formatted <= 0) { return QuickerSFV_Result_Failed; }
         res = Write(write_provider, write_buffer, bytes_formatted, &bytes_written);
         if (res != QuickerSFV_CallbackResult_Ok) { break; }

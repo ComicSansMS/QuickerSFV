@@ -25,7 +25,7 @@ typedef enum tag_QuickerSFV_CallbackResult {
 typedef enum tag_QuickerSFV_ProviderCapabilities {
     QuickerSFV_ProviderCapabilities_Full       = 0,
     QuickerSFV_ProviderCapabilities_VerifyOnly = 1,
-    QuickerSFV_ProviderCapabilities_Reserved   = 0xffffffff,
+    QuickerSFV_ProviderCapabilities_Reserved   = INT32_MAX,
 } QuickerSFV_ProviderCapabilities;
 
 typedef struct tag_QuickerSFV_GUID {
@@ -151,7 +151,7 @@ struct IQuickerSFV_ChecksumProvider_Vtbl {
         QuickerSFV_CallbackResult (*next_entry)(
             QuickerSFV_FileWriteProviderP write_provider,
             char const** out_filename,
-            void** out_digest_user_data
+            char const** out_digest
         )
     );
 };
