@@ -12,6 +12,7 @@
 *.svg text
 *.asm text
 *.S text
+*.cfg.in text
 
 # Visual Studio specific files
 *.sln text eol=crlf

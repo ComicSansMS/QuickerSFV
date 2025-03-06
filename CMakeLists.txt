@@ -19,6 +19,7 @@ project(QuickerSFV
     DESCRIPTION "QuickerSFV"
     HOMEPAGE_URL https://github.com/ComicSansMS/QuickerSFV/
 )
+message(STATUS "QuickerSFV V-${PROJECT_VERSION}")
 
 if(MSVC)
     option(QUICKER_SFV_BUILD_SELF_CONTAINED "A minimal build with no plugin support and no dependencies on the VC runtime" OFF)
@@ -48,6 +49,21 @@ if(BUILD_TESTS)
     enable_testing()
     include(cmake/coverage.cmake)
     add_subdirectory(external/catch2)
+endif()
+option(BUILD_DOCUMENTATION "Determines whether to build the doxygen documentation." ON)
+if(BUILD_DOCUMENTATION)
+    find_package(Doxygen OPTIONAL_COMPONENTS dot)
+    if(TARGET Doxygen::dot)
+        set(QUICKER_SFV_DOXYGEN_HAVE_DOT YES)
+    endif()
+    configure_file(
+        ${PROJECT_SOURCE_DIR}/doc/doxygen.cfg.in
+        ${PROJECT_BINARY_DIR}/generated/doc/doxygen.cfg
+    )
+    add_custom_target(generate_docs
+        COMMAND Doxygen::doxygen ${PROJECT_BINARY_DIR}/generated/doc/doxygen.cfg
+        COMMENT "Generating Doxygen Documentation"
+    )
 endif()
 
 add_subdirectory(external/chromium_zlib)

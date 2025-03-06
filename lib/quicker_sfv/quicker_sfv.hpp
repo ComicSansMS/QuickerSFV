@@ -12,6 +12,8 @@
 #include <quicker_sfv/utf.hpp>
 #include <quicker_sfv/version.hpp>
 
+/** QuickerSFV library.
+ */
 namespace quicker_sfv {
 
 bool supportsAvx512();

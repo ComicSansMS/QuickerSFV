@@ -3,12 +3,16 @@
 
 namespace quicker_sfv {
 
+/** Version number.
+ */
 struct Version {
     int major;
     int minor;
     int patch;
 };
 
+/** Returns the version number of the library build.
+ */
 Version getVersion();
 
 }
