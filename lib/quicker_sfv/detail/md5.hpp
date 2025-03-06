@@ -8,6 +8,8 @@
 
 namespace quicker_sfv::detail {
 
+/** MD5 hasher.
+ */
 class MD5Hasher: public Hasher {
 private:
     struct Pimpl;

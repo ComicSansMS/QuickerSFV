@@ -6,9 +6,16 @@ TEST_CASE("Error")
 {
     using quicker_sfv::Error;
     using quicker_sfv::Exception;
-    CHECK_THROWS_AS(quicker_sfv::throwException(Error::Failed), Exception);
-
     bool did_catch = false;
+    try {
+        quicker_sfv::throwException(Error::Failed);
+    } catch (std::exception& e) {
+        CHECK(dynamic_cast<Exception*>(&e) != nullptr);
+        did_catch = true;
+    }
+    CHECK(did_catch);
+
+    did_catch = false;
     try {
         quicker_sfv::throwException(Error::Failed);
         CHECK(false);
@@ -21,7 +28,6 @@ TEST_CASE("Error")
 
     auto getErrorString = [](Error e)->std::u8string {
         try { throwException(e); } catch (Exception const& e) { return std::u8string{ e.what8() }; }
-        return {};
     };
     CHECK(getErrorString(Error::Failed)         == u8"Failed");
     CHECK(getErrorString(Error::SystemError)    == u8"System error");

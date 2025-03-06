@@ -161,6 +161,7 @@ if(BUILD_TESTS)
         ${PROJECT_SOURCE_DIR}/test/error.t.cpp
         ${PROJECT_SOURCE_DIR}/test/fast_crc32.t.cpp
         ${PROJECT_SOURCE_DIR}/test/line_reader.t.cpp
+        ${PROJECT_SOURCE_DIR}/test/md5.t.cpp
         ${PROJECT_SOURCE_DIR}/test/utf.t.cpp
         ${PROJECT_SOURCE_DIR}/test/version.t.cpp
     )
