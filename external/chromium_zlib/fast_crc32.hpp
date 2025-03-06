@@ -10,7 +10,7 @@ bool supportsSse42();
 
 bool supportsAvx512();
 
-uint32_t crc32(char const* buffer, size_t buffer_size, uint32_t crc_start, bool use_avx512);
+uint32_t crc32(char const* buffer, size_t buffer_size, uint32_t crc_start, bool use_avx512, bool use_sse42);
 
 }
 #endif

@@ -46,13 +46,13 @@ std::u8string CrcDigest::toString() const {
 } // anonymous namespace
 
 Crc32Hasher::Crc32Hasher(HasherOptions const& opt)
-    :m_state(0), m_useAvx512(opt.has_avx512)
+    :m_state(0), m_useAvx512(opt.has_avx512), m_useSse42(opt.has_sse42)
 {}
 
 Crc32Hasher::~Crc32Hasher() = default;
 
 void Crc32Hasher::addData(std::span<std::byte const> data) {
-    m_state = crc::crc32(reinterpret_cast<char const*>(data.data()), data.size(), m_state, m_useAvx512);
+    m_state = crc::crc32(reinterpret_cast<char const*>(data.data()), data.size(), m_state, m_useAvx512, m_useSse42);
 }
 
 Digest Crc32Hasher::finalize() {

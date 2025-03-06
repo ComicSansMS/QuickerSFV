@@ -11,6 +11,7 @@ class Crc32Hasher: public Hasher {
 private:
     uint32_t m_state;
     bool m_useAvx512;
+    bool m_useSse42;
 public:
     explicit Crc32Hasher(HasherOptions const& opt);
     ~Crc32Hasher() override;

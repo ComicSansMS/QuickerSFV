@@ -107,23 +107,20 @@ uint32_t crc32_avx512_simd_(unsigned char const* buf, size_t len, uint32_t crc);
 uint32_t crc32_sse42_simd_(unsigned char const* buf, size_t len, uint32_t crc);
 } // namespace detail
 
-uint32_t crc32(char const* buffer, size_t buffer_size, uint32_t crc_start, bool use_avx512) {
+uint32_t crc32(char const* buffer, size_t buffer_size, uint32_t crc_start, bool use_avx512, bool use_sse42) {
     size_t remain = buffer_size;
     uint32_t crc_checksum = crc_start;
-    if (use_avx512) {
-        if (remain > 256) {
-            size_t const mod_64 = buffer_size % 64;
-            crc_checksum = ~detail::crc32_avx512_simd_(reinterpret_cast<unsigned char const*>(buffer),
-                                                       buffer_size - mod_64, ~crc_checksum);
-            remain = mod_64;
-        }
-    } else {
-        if (remain > 64) {
-            size_t const mod_16 = buffer_size % 16;
-            crc_checksum = ~detail::crc32_sse42_simd_(reinterpret_cast<unsigned char const*>(buffer),
-                                                      buffer_size - mod_16, ~crc_checksum);
-            remain = mod_16;
-        }
+    if constexpr (sizeof(void*) == 8) { use_sse42 = true; }
+    if (use_avx512 && (remain > 256)) {
+        size_t const mod_64 = buffer_size % 64;
+        crc_checksum = ~detail::crc32_avx512_simd_(reinterpret_cast<unsigned char const*>(buffer),
+                                                    buffer_size - mod_64, ~crc_checksum);
+        remain = mod_64;
+    } else if (use_sse42 && (remain > 64)) {
+        size_t const mod_16 = buffer_size % 16;
+        crc_checksum = ~detail::crc32_sse42_simd_(reinterpret_cast<unsigned char const*>(buffer),
+                                                    buffer_size - mod_16, ~crc_checksum);
+        remain = mod_16;
     }
     // remainder is handled by reference implementation
     return ~crc32_reference(buffer + buffer_size - remain, remain, ~crc_checksum);
