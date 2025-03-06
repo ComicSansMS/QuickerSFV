@@ -151,7 +151,12 @@ endif()
 if(BUILD_TESTS)
     add_executable(quicker_sfv_test)
     target_sources(quicker_sfv_test
+        PRIVATE FILE_SET HEADERS
+        BASE_DIRS ${PROJECT_SOURCE_DIR}/test
+        FILES
+        ${PROJECT_SOURCE_DIR}/test/test_digest.hpp
         PRIVATE
+        ${PROJECT_SOURCE_DIR}/test/checksum_file.t.cpp
         ${PROJECT_SOURCE_DIR}/test/fast_crc32.t.cpp
         ${PROJECT_SOURCE_DIR}/test/line_reader.t.cpp
         ${PROJECT_SOURCE_DIR}/test/utf.t.cpp
