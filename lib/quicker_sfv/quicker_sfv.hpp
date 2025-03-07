@@ -9,7 +9,7 @@
 #include <quicker_sfv/hasher.hpp>
 #include <quicker_sfv/md5_provider.hpp>
 #include <quicker_sfv/sfv_provider.hpp>
-#include <quicker_sfv/utf.hpp>
+#include <quicker_sfv/string_utilities.hpp>
 #include <quicker_sfv/version.hpp>
 
 /** QuickerSFV library.

@@ -2,7 +2,7 @@
 #define INCLUDE_GUARD_QUICKER_SFV_GUI_UI_COMMAND_LINE_PARSER_HPP
 
 #include <quicker_sfv/error.hpp>
-#include <quicker_sfv/utf.hpp>
+#include <quicker_sfv/string_utilities.hpp>
 
 #include <string>
 #include <string_view>

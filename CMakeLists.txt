@@ -125,7 +125,7 @@ target_sources(quicker_sfv
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5_provider.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/quicker_sfv.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/sfv_provider.hpp
-    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/utf.hpp
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/string_utilities.hpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/version.hpp
     PRIVATE
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/checksum_file.cpp
@@ -138,7 +138,7 @@ target_sources(quicker_sfv
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/md5_provider.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/quicker_sfv.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/sfv_provider.cpp
-    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/utf.cpp
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/string_utilities.cpp
     ${PROJECT_BINARY_DIR}/generated/quicker_sfv/src/version.cpp
     PRIVATE
     FILE_SET detail_headers TYPE HEADERS
@@ -182,7 +182,7 @@ if(BUILD_TESTS)
         ${PROJECT_SOURCE_DIR}/test/md5_provider.t.cpp
         ${PROJECT_SOURCE_DIR}/test/quicker_sfv.t.cpp
         ${PROJECT_SOURCE_DIR}/test/string_conversion.t.cpp
-        ${PROJECT_SOURCE_DIR}/test/utf.t.cpp
+        ${PROJECT_SOURCE_DIR}/test/string_utilities.t.cpp
         ${PROJECT_SOURCE_DIR}/test/version.t.cpp
     )
     target_link_libraries(quicker_sfv_test PRIVATE chromium-zlib quicker_sfv Catch2)

@@ -1,4 +1,4 @@
-#include <quicker_sfv/utf.hpp>
+#include <quicker_sfv/string_utilities.hpp>
 
 #include <catch.hpp>
 
@@ -59,7 +59,7 @@ struct StringMaker<quicker_sfv::Utf16Encode> {
 
 }
 
-TEST_CASE("Unicode")
+TEST_CASE("String Utilities")
 {
     using quicker_sfv::DecodeResult;
     using quicker_sfv::Utf8Encode;
@@ -310,6 +310,51 @@ TEST_CASE("Unicode")
         CHECK(convertToUtf16(u8"") == u"");
         CHECK(convertToUtf16(u8"Hello there!") == u"Hello there!");
         CHECK(convertToUtf16(u8"A¡ࠀ🍫嶲Z") == u"A¡ࠀ🍫嶲Z");
+    }
+
+    SECTION("Trim") {
+        using quicker_sfv::trim;
+        CHECK(trim(u8"") == u8"");
+        CHECK(trim(u8"    ") == u8"");
+        CHECK(trim(u8"abc") == u8"abc");
+        CHECK(trim(u8"   abc   ") == u8"abc");
+        CHECK(trim(u8" \t\r\n\v\fabc\t\r\n\v\f   ") == u8"abc");
+        CHECK(trim(u8" \t\r\n\v\fa  b  c\t\r\n\v\f   ") == u8"a  b  c");
+    }
+    SECTION("Trim All Utf") {
+        using quicker_sfv::trimAllUtf;
+        CHECK(trimAllUtf(u8"") == u8"");
+        CHECK(trimAllUtf(u8"   ") == u8"");
+        CHECK(trimAllUtf(u8"abc") == u8"abc");
+        CHECK(trimAllUtf(u8"   abc   ") == u8"abc");
+        CHECK(trimAllUtf(u8" \t\r\n\v\fabc\t\r\n\v\f   ") == u8"abc");
+        CHECK(trimAllUtf(u8" \t\r\n\v\fa  b  c\t\r\n\v\f   ") == u8"a  b  c");
+        auto const d = [](char32_t c) -> std::u8string {
+            auto const u = quicker_sfv::encodeUtf32ToUtf8(c);
+            std::u8string ret;
+            for (size_t i = 0; i < u.number_of_code_units; ++i) {
+                ret.push_back(u.encode[i]);
+            }
+            return ret;
+        };
+        CHECK(trimAllUtf(d(0x2000) + d(0x0085) + d(0x00A0) + d(0x1680) + d(0x2000) + d(0x2001) + d(0x2002) + d(0x2003) +
+            d(0x2004) + d(0x2005) + d(0x2006) + d(0x2007) + d(0x2008) + d(0x2009) + d(0x200A) + d(0x2028) + d(0x2029) +
+            d(0x202F) + d(0x205F) + d(0x3000) + u8" \t\r\n\v\fabc\t\r\n\v\f   " +
+            d(0x2000) + d(0x0085) + d(0x00A0) + d(0x1680) + d(0x2000) + d(0x2001) + d(0x2002) + d(0x2003) +
+            d(0x2004) + d(0x2005) + d(0x2006) + d(0x2007) + d(0x2008) + d(0x2009) + d(0x200A) + d(0x2028) + d(0x2029) +
+            d(0x202F) + d(0x205F) + d(0x3000) + d(0x2000) + d(0x2001)) == u8"abc");
+        CHECK(trimAllUtf(d(0x2000) + d(0x0085) + d(0x00A0) + d(0x1680) + d(0x2000) + d(0x2001) + d(0x2002) + d(0x2003) +
+            d(0x2004) + d(0x2005) + d(0x2006) + d(0x2007) + d(0x2008) + d(0x2009) + d(0x200A) + d(0x2028) + d(0x2029) +
+            d(0x202F) + d(0x205F) + d(0x3000) + u8" \t\r\n\v\fa  b  c\t\r\n\v\f   " +
+            d(0x2000) + d(0x0085) + d(0x00A0) + d(0x1680) + d(0x2000) + d(0x2001) + d(0x2002) + d(0x2003) +
+            d(0x2004) + d(0x2005) + d(0x2006) + d(0x2007) + d(0x2008) + d(0x2009) + d(0x200A) + d(0x2028) + d(0x2029) +
+            d(0x202F) + d(0x205F) + d(0x3000) + d(0x2000) + d(0x2001)) == u8"a  b  c");
+        CHECK(trimAllUtf(d(0x2000) + d(0x0085) + d(0x00A0) + d(0x1680) + d(0x2000) + d(0x2001) + d(0x2002) + d(0x2003) +
+            d(0x2004) + d(0x2005) + d(0x2006) + d(0x2007) + d(0x2008) + d(0x2009) + d(0x200A) + d(0x2028) + d(0x2029) +
+            d(0x202F) + d(0x205F) + d(0x3000) + d(0x1F36B) + u8" \t\r\n\v\fabc\t\r\n\v\f   " +
+            d(0x2000) + d(0x0085) + d(0x00A0) + d(0x1680) + d(0x2000) + d(0x2001) + d(0x2002) + d(0x2003) +
+            d(0x2004) + d(0x2005) + d(0x2006) + d(0x2007) + d(0x2008) + d(0x2009) + d(0x200A) + d(0x2028) + d(0x2029) +
+            d(0x202F) + d(0x205F) + d(0x3000) + d(0x2000) + d(0x2001)) == u8"🍫 \t\r\n\v\fabc");
     }
 }
 

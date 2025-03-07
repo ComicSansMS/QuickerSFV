@@ -2,6 +2,7 @@
 
 #include <quicker_sfv/error.hpp>
 #include <quicker_sfv/line_reader.hpp>
+#include <quicker_sfv/string_utilities.hpp>
 
 #include <quicker_sfv/detail/md5.hpp>
 
@@ -34,26 +35,6 @@ HasherPtr MD5Provider::createHasher(HasherOptions const&) const {
 
 Digest MD5Provider::digestFromString(std::u8string_view str) const {
     return detail::MD5Hasher::digestFromString(str);
-}
-
-std::u8string_view trim(std::u8string_view sv) {
-    while (sv.ends_with(u8' ')
-        || sv.ends_with(u8'\t')
-        || sv.ends_with(u8'\n')
-        || sv.ends_with(u8'\r')
-        || sv.ends_with(u8'\f')
-        || sv.ends_with(u8'\v')) {
-        sv = sv.substr(0, sv.size() - 1);
-    }
-    while (sv.starts_with(u8' ')
-        || sv.starts_with(u8'\t')
-        || sv.starts_with(u8'\n')
-        || sv.starts_with(u8'\r')
-        || sv.starts_with(u8'\f')
-        || sv.starts_with(u8'\v')) {
-        sv = sv.substr(1);
-    }
-    return sv;
 }
 
 ChecksumFile MD5Provider::readFromFile(FileInput& file_input) const {

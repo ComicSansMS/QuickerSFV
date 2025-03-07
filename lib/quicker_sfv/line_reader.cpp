@@ -1,7 +1,7 @@
 #include <quicker_sfv/line_reader.hpp>
 
 #include <quicker_sfv/error.hpp>
-#include <quicker_sfv/utf.hpp>
+#include <quicker_sfv/string_utilities.hpp>
 
 #include <algorithm>
 #include <cassert>

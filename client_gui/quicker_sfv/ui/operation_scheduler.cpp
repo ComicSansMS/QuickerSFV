@@ -3,7 +3,7 @@
 #include <quicker_sfv/ui/string_helper.hpp>
 #include <quicker_sfv/ui/user_messages.hpp>
 
-#include <quicker_sfv/utf.hpp>
+#include <quicker_sfv/string_utilities.hpp>
 
 #include <algorithm>
 #include <array>
