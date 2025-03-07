@@ -279,18 +279,6 @@ std::u8string_view trim(std::u8string_view sv) {
     return sv;
 }
 
-/** Remove all ASCII and Unicode whitespace from the front and back of a string.
- * Whitespace characters are all ASCII characters (see trim()), as well as
- * NEXT LINE (U+0085), NO-BREAK SPACE (U+00A0), OGHAM SPACE MARK (U+1680),
- * EN QUAD (U+2000), EM QUAD (U+2001), EN SPACE (U+2002), EM SPACE (U+2003),
- * THREE-PER-EM SPACE (U+2004), FOUR-PER-EM SPACE (U+2005), SIX-PER-EM SPACE (U+2006),
- * FIGURE SPACE (U+2007), PUNCTUATION SPACE (U+2008), THIN SPACE (U+2009),
- * HAIR SPACE (U+200A), LINE SEPARATOR (U+2028), PARAGRAPH SEPARATOR (U+2029),
- * NARROW NO-BREAK SPACE (U+202F), MEDIUM MATHEMATICAL SPACE (U+205F),
- * and IDEOGRAPHIC SPACE (U+3000).
- * @param[in] sv Input string.
- * @return The trimmed string.
- */
 std::u8string_view trimAllUtf(std::u8string_view sv) {
     auto is_whitespace = [](char32_t c) -> bool {
         return (c == U'\t') || (c == U'\n') || (c == U'\v') || (c == U'\f') ||

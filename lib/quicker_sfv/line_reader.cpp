@@ -34,7 +34,7 @@ bool LineReader::read_more() {
 }
 
 // return conditions: file i/o error, eof, invalid file, invalid utf8, line, empty line
-std::optional<std::u8string> LineReader::read_line() {
+std::optional<std::u8string> LineReader::readLine() {
     if (done()) { return std::nullopt; }
     if (m_fileOffset == 0) {
         // initial read
@@ -57,7 +57,7 @@ std::optional<std::u8string> LineReader::read_line() {
         it = std::find(begin(m_buffers.back), end(m_buffers.back), newline);
         if ((it == end(m_buffers.back)) && (!m_eof)) {
             // no newline in either buffer; assume invalid file
-            return std::nullopt;
+            throwException(Error::ParserError);
         }
         std::span<std::byte> front_range(it_begin, end(m_buffers.front));
         std::span<std::byte> back_range(begin(m_buffers.back), it);

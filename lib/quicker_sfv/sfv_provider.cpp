@@ -39,7 +39,7 @@ ChecksumFile SfvProvider::readFromFile(FileInput& file_input) const {
     LineReader reader(file_input);
     ChecksumFile ret;
     for (;;) {
-        auto opt_line = reader.read_line();
+        auto opt_line = reader.readLine();
         if (!opt_line) {
             if (reader.done()) {
                 break;

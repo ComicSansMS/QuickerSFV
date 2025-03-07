@@ -248,7 +248,7 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
                 ReadInput* ri = reinterpret_cast<ReadInput*>(read_provider);
                 if (ri->line_reader.done()) { return QuickerSFV_CallbackResult_Ok; }
                 try {
-                    std::optional<std::u8string> opt_str = ri->line_reader.read_line();
+                    std::optional<std::u8string> opt_str = ri->line_reader.readLine();
                     if (!opt_str) { return QuickerSFV_CallbackResult_Failed; }
                     ri->line = std::move(*opt_str);
                     *out_line = reinterpret_cast<char const*>(ri->line.c_str());

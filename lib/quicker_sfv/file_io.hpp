@@ -7,6 +7,10 @@
 
 namespace quicker_sfv {
 
+/** Interface for file output operations.
+ * This will be provided by the client as the sole facility for write access to the
+ * filesystem.
+ */
 class FileOutput {
 public:
     virtual ~FileOutput() = 0;
@@ -18,6 +22,10 @@ public:
     virtual size_t write(std::span<std::byte const> bytes_to_write) = 0;
 };
 
+/** Interface for file input operations.
+ * This will be provided by the client as the sole facility for read access to the
+ * filesystem.
+ */
 class FileInput {
 public:
     static constexpr size_t const RESULT_END_OF_FILE = std::numeric_limits<size_t>::max();

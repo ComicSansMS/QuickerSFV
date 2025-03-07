@@ -125,7 +125,7 @@ std::u8string convertToUtf8(std::u16string_view str);
 std::u16string convertToUtf16(std::u8string_view str);
 
 /** Remove all ASCII whitespace characters from the front and back of a string.
- * Whitespace characters are ' ', '\t', '\\n', '\r', 'f', and '\v'.
+ * Whitespace characters are ' ', '\\t', '\\n', '\\r', '\\f', and '\\v'.
  * @param[in] sv Input string.
  * @return The trimmed string.
  */
@@ -140,6 +140,7 @@ std::u8string_view trim(std::u8string_view sv);
  * HAIR SPACE (U+200A), LINE SEPARATOR (U+2028), PARAGRAPH SEPARATOR (U+2029),
  * NARROW NO-BREAK SPACE (U+202F), MEDIUM MATHEMATICAL SPACE (U+205F),
  * and IDEOGRAPHIC SPACE (U+3000).
+ * 
  * @pre sv is a valid UTF-8 encoded string.
  * @param[in] sv Input string.
  * @return The trimmed string.
