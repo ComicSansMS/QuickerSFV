@@ -68,7 +68,7 @@ DecodeResult decodeUtf16(std::span<char16_t const> range);
 DecodeResult decodeUtf16_non_strict(std::span<char16_t const> range);
 
 /** Encode a single UTF-32 code point to UTF-16.
- * @param[in] A UTF-32 code point (`0x00000000`-`0x0010FFFF`).
+ * @param[in] c A UTF-32 code point (`0x00000000`-`0x0010FFFF`).
  * @return The UTF-16 encoded result. If the input value it out of range,
  *         returns a result with number_of_code_units set to 0.
  */
@@ -82,7 +82,7 @@ Utf16Encode encodeUtf32ToUtf16(char32_t c);
 DecodeResult decodeUtf8(std::span<char8_t const> range);
 
 /** Encode a single UTF-32 code point to UTF-8.
- * @param[in] A UTF-32 code point (`0x00000000`-`0x0010FFFF`).
+ * @param[in] c A UTF-32 code point (`0x00000000`-`0x0010FFFF`).
  * @return The UTF-8 encoded result. If the input value it out of range,
  *         returns a result with number_of_code_units set to 0.
  */

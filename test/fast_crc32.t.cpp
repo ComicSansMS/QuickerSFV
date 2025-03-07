@@ -14,7 +14,7 @@ namespace {
 void test_crc32(bool use_sse42, bool use_avx512) {
     using quicker_sfv::crc::crc32;
     auto crc_helper = [=](std::span<char const> data) {
-        return crc32(data.data(), data.size() - 1, 0, use_sse42, use_avx512);
+        return crc32(data.data(), data.size() - 1, 0, use_avx512, use_sse42);
     };
     CHECK(crc_helper("") == 0);
     CHECK(crc_helper("\0") == 0xD202EF8D);
