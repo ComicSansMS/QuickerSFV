@@ -21,6 +21,13 @@ project(QuickerSFV
 )
 message(STATUS "QuickerSFV V-${PROJECT_VERSION}")
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    option(BUILD_WITH_SANITIZERS "Build with sanitizers and libfuzzer" OFF)
+    if(BUILD_WITH_SANITIZERS)
+        add_compile_options(-fsanitize=address,fuzzer,undefined)
+        add_link_options(-fsanitize=address,undefined)
+    endif()
+endif()
 if(MSVC)
     option(QUICKER_SFV_BUILD_SELF_CONTAINED "A minimal build with no plugin support and no dependencies on the VC runtime" OFF)
     if(QUICKER_SFV_BUILD_SELF_CONTAINED)
@@ -185,6 +192,26 @@ if(BUILD_TESTS)
         $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -pedantic>
     )
     add_test(NAME "QuickerSFV Unit Tests" COMMAND quicker_sfv_test)
+
+    if(BUILD_WITH_SANITIZERS)
+        function(add_fuzz_test test_name)
+            add_executable(quicker_sfv_fuzz_${test_name})
+            target_sources(quicker_sfv_fuzz_${test_name}
+                PRIVATE
+                ${PROJECT_SOURCE_DIR}/test/fuzz_${test_name}.t.cpp
+                PRIVATE FILE_SET HEADERS
+                BASE_DIRS ${PROJECT_SOURCE_DIR}/test
+                FILES
+                ${PROJECT_SOURCE_DIR}/test/test_digest.hpp
+                ${PROJECT_SOURCE_DIR}/test/test_file_io.hpp
+            )
+            target_compile_options(quicker_sfv_fuzz_${test_name} PRIVATE -Wall -Wextra -pedantic)
+            target_link_libraries(quicker_sfv_fuzz_${test_name} PRIVATE quicker_sfv)
+            target_link_options(quicker_sfv_fuzz_${test_name} PRIVATE -fsanitize=fuzzer)
+        endfunction()
+        add_fuzz_test(md5_digest_parsing)
+        add_fuzz_test(md5_file_parsing)
+    endif()
 endif()
 
 if(MSVC)
