@@ -132,7 +132,7 @@ std::u16string convertToUtf16(std::u8string_view str);
 std::u8string_view trim(std::u8string_view sv);
 
 /** Remove all ASCII and Unicode whitespace from the front and back of a string.
- * Whitespace characters are all ASCII characters (see trim()), as well as
+ * Whitespace characters are all ASCII whitespace (see trim()), as well as
  * NEXT LINE (U+0085), NO-BREAK SPACE (U+00A0), OGHAM SPACE MARK (U+1680),
  * EN QUAD (U+2000), EM QUAD (U+2001), EN SPACE (U+2002), EM SPACE (U+2003),
  * THREE-PER-EM SPACE (U+2004), FOUR-PER-EM SPACE (U+2005), SIX-PER-EM SPACE (U+2006),

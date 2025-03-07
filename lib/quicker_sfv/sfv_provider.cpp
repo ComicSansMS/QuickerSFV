@@ -2,6 +2,7 @@
 
 #include <quicker_sfv/error.hpp>
 #include <quicker_sfv/line_reader.hpp>
+#include <quicker_sfv/string_utilities.hpp>
 
 #include <quicker_sfv/detail/crc32.hpp>
 
@@ -44,7 +45,7 @@ ChecksumFile SfvProvider::readFromFile(FileInput& file_input) const {
                 break;
             }
         }
-        auto line = std::u8string_view{ *opt_line };
+        auto line = trim(std::u8string_view{ *opt_line });
         if (line.empty()) { continue; }
         // skip comments
         if (line.starts_with(u8";")) { continue; }
@@ -52,9 +53,9 @@ ChecksumFile SfvProvider::readFromFile(FileInput& file_input) const {
         if (line.size() < 10) { throwException(Error::ParserError); }
         std::size_t const separator_idx = line.size() - 8;
         if ((line[separator_idx - 1] != u8' ')) { throwException(Error::ParserError); }
-        std::u8string_view filepath_sv = line.substr(0, separator_idx - 1);
-        ret.addEntry(filepath_sv, detail::Crc32Hasher::digestFromString(line.substr(separator_idx))
-        );
+        std::u8string_view filepath_sv = trim(line.substr(0, separator_idx - 1));
+        if (filepath_sv.empty()) { throwException(Error::ParserError); }
+        ret.addEntry(filepath_sv, detail::Crc32Hasher::digestFromString(line.substr(separator_idx)));
     }
     return ret;
 }
@@ -67,7 +68,11 @@ void SfvProvider::writeNewFile(FileOutput& file_output, ChecksumFile const& f) c
         out_str.push_back(u8' ');
         out_str.append(e.digest.toString());
         out_str.push_back(u8'\n');
-        file_output.write(std::span<std::byte const>(reinterpret_cast<std::byte const*>(out_str.data()), out_str.size()));
+        size_t const res =file_output.write(
+            std::span<std::byte const>(reinterpret_cast<std::byte const*>(out_str.data()), out_str.size()));
+        if (res == 0) {
+            throwException(Error::FileIO);
+        }
     }
 }
 

@@ -9,6 +9,12 @@
 
 namespace quicker_sfv {
 
+/** Support for `*.sfv` files.
+ * One line per file. Each line ends with a Crc32 checksum, preceded by the relative
+ * path of the file.
+ * File encoding must be UTF-8. Line endings must be either CRLF or LF on read
+ * and will always be LF on write.
+ */
 class SfvProvider : public ChecksumProvider {
 public:
     friend ChecksumProviderPtr createSfvProvider();
@@ -26,6 +32,8 @@ public:
     void writeNewFile(FileOutput& file_output, ChecksumFile const& f) const override;
 };
 
+/** Creates an SfvProvider.
+ */
 ChecksumProviderPtr createSfvProvider();
 
 }

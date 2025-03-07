@@ -181,6 +181,7 @@ if(BUILD_TESTS)
         ${PROJECT_SOURCE_DIR}/test/md5.t.cpp
         ${PROJECT_SOURCE_DIR}/test/md5_provider.t.cpp
         ${PROJECT_SOURCE_DIR}/test/quicker_sfv.t.cpp
+        ${PROJECT_SOURCE_DIR}/test/sfv_provider.t.cpp
         ${PROJECT_SOURCE_DIR}/test/string_conversion.t.cpp
         ${PROJECT_SOURCE_DIR}/test/string_utilities.t.cpp
         ${PROJECT_SOURCE_DIR}/test/version.t.cpp

@@ -105,7 +105,7 @@ TEST_CASE("MD5 Provider")
         SECTION("Invalid file formats") {
             SECTION("Multiple entries on one line") {
                 TestInput in;
-                in = "14d739518e715e6e61c19eb05f58a8da *some/example/path"
+                in = "14d739518e715e6e61c19eb05f58a8da *some/example/path "
                      "93b885adfe0da089cdf634904fd59f71 *some_file.rar"     "\n"
                      "a6e25eeaf4af08b6baf6b2e31ceccfdb *another_file.txt"  "\n";
                 CHECK_THROWS_AS(p->readFromFile(in), quicker_sfv::Exception);
@@ -166,6 +166,21 @@ TEST_CASE("MD5 Provider")
                 REQUIRE(f.getEntries().size() == 1);
                 CHECK((f.getEntries()[0].digest == p->digestFromString(u8"14d739518e715e6e61c19eb05f58a8da")));
                 CHECK(f.getEntries()[0].path == u8"some/example/path");
+            }
+            SECTION("Spaces in path") {
+                TestInput in;
+                in = "14d739518e715e6e61c19eb05f58a8da *some/example with spaces/path with spaces" "\n"
+                    "93b885adfe0da089cdf634904fd59f71 *some_file.rar"     "\n"
+                    "a6e25eeaf4af08b6baf6b2e31ceccfdb *another_file.txt"  "\n";
+                auto const f = p->readFromFile(in);
+                REQUIRE(f.getEntries().size() == 3);
+                CHECK((f.getEntries()[0].digest == p->digestFromString(u8"14d739518e715e6e61c19eb05f58a8da")));
+                CHECK(f.getEntries()[0].path == u8"some/example with spaces/path with spaces");
+                CHECK((f.getEntries()[1].digest == p->digestFromString(u8"93b885adfe0da089cdf634904fd59f71")));
+                CHECK(f.getEntries()[1].path == u8"some_file.rar");
+                CHECK((f.getEntries()[2].digest == p->digestFromString(u8"a6e25eeaf4af08b6baf6b2e31ceccfdb")));
+                CHECK(f.getEntries()[2].path == u8"another_file.txt");
+
             }
         }
     }
