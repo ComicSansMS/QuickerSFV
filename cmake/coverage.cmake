@@ -20,6 +20,7 @@ if(GENERATE_COVERAGE_INFO)
                 --output coverage/index.html
                 --root ${PROJECT_SOURCE_DIR}
                 --exclude .*\.t\.cpp
+                --exclude .*/test/.*hpp
                 --exclude .*/catch/catch\.hpp
             WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
             COMMENT "Generating gcovr html coverage report"
