@@ -140,12 +140,27 @@ struct PluginHasher : public quicker_sfv::Hasher {
 
 struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
     plugin_interface::IChecksumProvider* pif;
+    ProviderCapabilities capabilities;
     std::u8string file_extension;
     std::u8string file_description;
 
     explicit PluginChecksumProvider(plugin_interface::IChecksumProvider* pif)
         :pif(pif)
     {
+        QuickerSFV_ProviderCapabilities caps;
+        if (pif->GetProviderCapabilities(&caps) != QuickerSFV_Result_OK) {
+            throwException(Error::PluginError);
+        }
+        switch (caps) {
+        case QuickerSFV_ProviderCapabilities_Full:
+            capabilities = ProviderCapabilities::Full;
+            break;
+        case QuickerSFV_ProviderCapabilities_VerifyOnly:
+            capabilities = ProviderCapabilities::VerifyOnly;
+            break;
+        default: throwException(Error::PluginError);
+        }
+
         size_t required_size_file_extension = 0;
         pif->FileExtension(nullptr, &required_size_file_extension);
         file_extension.resize(required_size_file_extension);
@@ -174,25 +189,15 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
         pif->Delete();
     }
     
-    [[nodiscard]] ProviderCapabilities getCapabilities() const override {
-        QuickerSFV_ProviderCapabilities caps;
-        if (pif->GetProviderCapabilities(&caps) != QuickerSFV_Result_OK) {
-            throwException(Error::PluginError);
-        }
-        switch (caps) {
-        case QuickerSFV_ProviderCapabilities_Full:
-            return ProviderCapabilities::Full;
-        case QuickerSFV_ProviderCapabilities_VerifyOnly:
-            return ProviderCapabilities::VerifyOnly;
-        }
-        throwException(Error::PluginError);
+    [[nodiscard]] ProviderCapabilities getCapabilities() const noexcept override {
+        return capabilities;
     }
     
-    [[nodiscard]] std::u8string_view fileExtensions() const override {
+    [[nodiscard]] std::u8string_view fileExtensions() const noexcept override {
         return file_extension;
     }
     
-    [[nodiscard]] std::u8string_view fileDescription() const override {
+    [[nodiscard]] std::u8string_view fileDescription() const noexcept override {
         return file_description;
     }
     
@@ -203,7 +208,9 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
             .has_sse42 = hasher_options.has_sse42,
             .has_avx512 = hasher_options.has_avx512
         };
-        pif->CreateHasher(&hasher, &opts);
+        if (pif->CreateHasher(&hasher, &opts) != QuickerSFV_Result_OK) {
+            throwException(Error::PluginError);
+        }
         plugin_interface::IHasher* h = std::bit_cast<plugin_interface::IHasher*>(hasher);
         return HasherPtr(new PluginHasher(h, pif));
     }
@@ -225,7 +232,7 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
             LineReader line_reader;
             std::u8string line;
         } read_provider{ this, &file_input, &ret, LineReader(file_input), {} };
-        pif->ReadFromFile(reinterpret_cast<QuickerSFV_FileReadProviderP>(&read_provider),
+        QuickerSFV_Result const res = pif->ReadFromFile(reinterpret_cast<QuickerSFV_FileReadProviderP>(&read_provider),
             [](QuickerSFV_FileWriteProviderP read_provider, char* out_read_buffer, size_t read_buffer_size, size_t* out_bytes_read) -> QuickerSFV_CallbackResult {
                 ReadInput* ri = reinterpret_cast<ReadInput*>(read_provider);
                 size_t const bytes_read = ri->file_input->read(std::span<std::byte>(reinterpret_cast<std::byte*>(out_read_buffer), read_buffer_size));
@@ -258,6 +265,9 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
                     ri->provider->digestFromString(reinterpret_cast<char8_t const*>(digest_string)));
                 return QuickerSFV_CallbackResult_Ok;
             });
+        if (res != QuickerSFV_Result_OK) {
+            throwException(Error::PluginError);
+        }
         return ret;
     }
     void writeNewFile(FileOutput& file_output, ChecksumFile const& f) const override {
@@ -268,7 +278,7 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
             std::span<ChecksumFile::Entry const>::iterator it;
             std::u8string digest_string;
         } write_provider{ &file_output, &f, f.getEntries().begin() };
-        pif->WriteNewFile(reinterpret_cast<QuickerSFV_FileWriteProviderP>(&write_provider),
+        QuickerSFV_Result const res = pif->WriteNewFile(reinterpret_cast<QuickerSFV_FileWriteProviderP>(&write_provider),
             [](QuickerSFV_FileWriteProviderP write_provider, char const* buffer, size_t buffer_size, size_t* out_bytes_written) -> QuickerSFV_CallbackResult {
                 WriteProvider* wp = reinterpret_cast<WriteProvider*>(write_provider);
                 try {
@@ -290,6 +300,9 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
                 ++wp->it;
                 return QuickerSFV_CallbackResult_MoreData;
             });
+        if (res != QuickerSFV_Result_OK) {
+            throwException(Error::PluginError);
+        }
     }
 };
 

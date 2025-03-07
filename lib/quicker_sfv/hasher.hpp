@@ -32,6 +32,7 @@ public:
     /** Add additional data to the current checksum.
      * @param[in] data Data to be included in the current checksum.
      * @pre The Hasher is not in its finalized state.
+     * @throw Exception Error::HasherFailure If the operation fails.
      */
     virtual void addData(std::span<std::byte const> data) = 0;
     /** Finalize the current checksum and retrieve the digest for all added data.
@@ -40,9 +41,11 @@ public:
      * A Hasher also can not be finalized twice to obtain the same Digest again.
      * @return The Digest of all data provided to addData() since the last reset().
      * @pre The Hasher is not in its finalized state.
+     * @throw Exception Error::HasherFailure If the operation fails.
      */
     virtual Digest finalize() = 0;
     /** Reset the Hasher back to its initial state.
+     * @throw Exception Error::HasherFailure If the operation fails.
      */
     virtual void reset() = 0;
 };

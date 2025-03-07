@@ -1,5 +1,7 @@
 #include <quicker_sfv/detail/md5.hpp>
 
+#include <quicker_sfv/error.hpp>
+
 #include <catch.hpp>
 
 TEST_CASE("MD5")
@@ -48,6 +50,9 @@ TEST_CASE("MD5")
             u8"14d739518e715e6e61c19eb05f58a8da");
         CHECK(MD5Hasher::digestFromString(u8"93b885adfe0da089cdf634904fd59f71").toString() ==
             u8"93b885adfe0da089cdf634904fd59f71");
+        CHECK_THROWS_AS(MD5Hasher::digestFromString(u8"Some Bogus String"), quicker_sfv::Exception);
+        CHECK_THROWS_AS(MD5Hasher::digestFromString(u8"Bad string of the correct length"), quicker_sfv::Exception);
+        CHECK_THROWS_AS(MD5Hasher::digestFromString(u8"93b885adfe0da089cdf634904fd59f7z"), quicker_sfv::Exception);
     }
 
     SECTION("Digest comparison")

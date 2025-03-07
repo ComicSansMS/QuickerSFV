@@ -4,12 +4,12 @@ set(QUICKER_SFV_PROJECT_VERSION_MAJOR 0)
 set(QUICKER_SFV_PROJECT_VERSION_MINOR 1)
 set(QUICKER_SFV_PROJECT_VERSION_PATCH 0)
 
-if (NOT QUICKER_SFV_BUILD_RELEASE)
+if(NOT QUICKER_SFV_BUILD_RELEASE)
     string(TIMESTAMP QUICKER_SFV_PROJECT_VERSION_TWEAK "%y%j")
 else()
     set(QUICKER_SFV_PROJECT_VERSION_TWEAK 0)
 endif()
-if (QUICKER_SFV_PROJECT_VERSION_TWEAK GREATER 65535)
+if(QUICKER_SFV_PROJECT_VERSION_TWEAK GREATER 65535)
     message(FATAL_ERROR "Invalid tweak version number (must be smaller than 65536): ${QUICKER_SFV_PROJECT_VERSION_TWEAK}")
 endif()
 set(QUICKER_SFV_PROJECT_VERSION ${QUICKER_SFV_PROJECT_VERSION_MAJOR}.${QUICKER_SFV_PROJECT_VERSION_MINOR}.${QUICKER_SFV_PROJECT_VERSION_PATCH}.${QUICKER_SFV_PROJECT_VERSION_TWEAK})
@@ -92,6 +92,17 @@ configure_file(
     ${PROJECT_BINARY_DIR}/generated/quicker_sfv/src/version.cpp
     @ONLY
 )
+set(QUICKER_SFV_QUICKER_SFV_DETAIL_HEADER_FILES
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/detail/crc32.hpp
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/detail/md5.hpp
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/detail/string_conversion.hpp
+)
+set(QUICKER_SFV_QUICKER_SFV_DETAIL_SOURCE_FILES
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/detail/crc32.cpp
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/detail/md5.cpp
+    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/detail/string_conversion.cpp
+)
+
 target_sources(quicker_sfv
     PUBLIC
     FILE_SET HEADERS
@@ -126,17 +137,15 @@ target_sources(quicker_sfv
     FILE_SET detail_headers TYPE HEADERS
     BASE_DIRS ${PROJECT_SOURCE_DIR}/lib
     FILES
-    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/detail/crc32.hpp
-    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/detail/md5.hpp
-    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/detail/string_conversion.hpp
+    ${QUICKER_SFV_QUICKER_SFV_DETAIL_HEADER_FILES}
     PRIVATE
-    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/detail/crc32.cpp
-    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/detail/md5.cpp
-    ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/detail/string_conversion.cpp
+    ${QUICKER_SFV_QUICKER_SFV_DETAIL_SOURCE_FILES}
 )
-if (MSVC)
+source_group("Header Files/detail" FILES ${QUICKER_SFV_QUICKER_SFV_DETAIL_HEADER_FILES})
+source_group("Source Files/detail" FILES ${QUICKER_SFV_QUICKER_SFV_DETAIL_SOURCE_FILES})
+if(MSVC)
     target_sources(quicker_sfv PRIVATE ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/quicker_sfv.natvis)
-endif ()
+endif()
 target_compile_features(quicker_sfv PUBLIC cxx_std_23)
 target_compile_options(quicker_sfv PRIVATE
     $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
@@ -155,6 +164,7 @@ if(BUILD_TESTS)
         BASE_DIRS ${PROJECT_SOURCE_DIR}/test
         FILES
         ${PROJECT_SOURCE_DIR}/test/test_digest.hpp
+        ${PROJECT_SOURCE_DIR}/test/test_file_io.hpp
         PRIVATE
         ${PROJECT_SOURCE_DIR}/test/checksum_file.t.cpp
         ${PROJECT_SOURCE_DIR}/test/crc32.t.cpp
@@ -162,6 +172,7 @@ if(BUILD_TESTS)
         ${PROJECT_SOURCE_DIR}/test/fast_crc32.t.cpp
         ${PROJECT_SOURCE_DIR}/test/line_reader.t.cpp
         ${PROJECT_SOURCE_DIR}/test/md5.t.cpp
+        ${PROJECT_SOURCE_DIR}/test/md5_provider.t.cpp
         ${PROJECT_SOURCE_DIR}/test/quicker_sfv.t.cpp
         ${PROJECT_SOURCE_DIR}/test/string_conversion.t.cpp
         ${PROJECT_SOURCE_DIR}/test/utf.t.cpp
@@ -267,7 +278,7 @@ endif()
 if(BUILD_PLUGINS)
     include(GenerateExportHeader)
 
-    if (OPENSSL_FOUND)
+    if(OPENSSL_FOUND)
         option(BUILD_SHA1_PLUGIN "Build SHA1 plugin" ON)
         if(BUILD_SHA1_PLUGIN)
             add_library(quicker_sfv_sha1 SHARED)

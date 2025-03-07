@@ -150,15 +150,15 @@ public:
 
 RarProvider::RarProvider() = default;
 RarProvider::~RarProvider() = default;
-ProviderCapabilities RarProvider::getCapabilities() const {
+ProviderCapabilities RarProvider::getCapabilities() const noexcept {
     return ProviderCapabilities::VerifyOnly;
 }
 
-std::u8string_view RarProvider::fileExtensions() const {
+std::u8string_view RarProvider::fileExtensions() const noexcept {
     return u8"*.rar";
 }
 
-std::u8string_view RarProvider::fileDescription() const {
+std::u8string_view RarProvider::fileDescription() const noexcept {
     return u8"RAR Archive";
 }
 

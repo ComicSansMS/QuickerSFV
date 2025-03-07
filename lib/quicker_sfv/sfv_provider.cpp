@@ -14,15 +14,15 @@ ChecksumProviderPtr createSfvProvider() {
 SfvProvider::SfvProvider() = default;
 SfvProvider::~SfvProvider() = default;
 
-ProviderCapabilities SfvProvider::getCapabilities() const {
+ProviderCapabilities SfvProvider::getCapabilities() const noexcept {
     return ProviderCapabilities::Full;
 }
 
-std::u8string_view SfvProvider::fileExtensions() const {
+std::u8string_view SfvProvider::fileExtensions() const noexcept {
     return u8"*.sfv";
 }
 
-std::u8string_view SfvProvider::fileDescription() const {
+std::u8string_view SfvProvider::fileDescription() const noexcept {
     return u8"Sfv File";
 }
 

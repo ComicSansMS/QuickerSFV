@@ -16,15 +16,15 @@ ChecksumProviderPtr createMD5Provider() {
 MD5Provider::MD5Provider() = default;
 MD5Provider::~MD5Provider() = default;
 
-ProviderCapabilities MD5Provider::getCapabilities() const {
+ProviderCapabilities MD5Provider::getCapabilities() const noexcept {
     return ProviderCapabilities::Full;
 }
 
-std::u8string_view MD5Provider::fileExtensions() const {
+std::u8string_view MD5Provider::fileExtensions() const noexcept {
     return u8"*.md5";
 }
 
-std::u8string_view MD5Provider::fileDescription() const {
+std::u8string_view MD5Provider::fileDescription() const noexcept {
     return u8"MD5";
 }
 
@@ -34,6 +34,26 @@ HasherPtr MD5Provider::createHasher(HasherOptions const&) const {
 
 Digest MD5Provider::digestFromString(std::u8string_view str) const {
     return detail::MD5Hasher::digestFromString(str);
+}
+
+std::u8string_view trim(std::u8string_view sv) {
+    while (sv.ends_with(u8' ')
+        || sv.ends_with(u8'\t')
+        || sv.ends_with(u8'\n')
+        || sv.ends_with(u8'\r')
+        || sv.ends_with(u8'\f')
+        || sv.ends_with(u8'\v')) {
+        sv = sv.substr(0, sv.size() - 1);
+    }
+    while (sv.starts_with(u8' ')
+        || sv.starts_with(u8'\t')
+        || sv.starts_with(u8'\n')
+        || sv.starts_with(u8'\r')
+        || sv.starts_with(u8'\f')
+        || sv.starts_with(u8'\v')) {
+        sv = sv.substr(1);
+    }
+    return sv;
 }
 
 ChecksumFile MD5Provider::readFromFile(FileInput& file_input) const {
@@ -51,10 +71,18 @@ ChecksumFile MD5Provider::readFromFile(FileInput& file_input) const {
         // skip comments
         if (line.starts_with(u8";")) { continue; }
         std::size_t const separator_idx = line.find(u8'*');
-        if (separator_idx == std::string::npos) { throwException(Error::ParserError); }
-        if ((separator_idx == 0) || (line[separator_idx - 1] != u8' ')) { throwException(Error::ParserError); }
-        std::u8string_view filepath_sv = line.substr(separator_idx + 1);
-        ret.addEntry(filepath_sv, detail::MD5Hasher::digestFromString(line.substr(0, separator_idx - 1)));
+        if (separator_idx == std::string::npos) {
+            throwException(Error::ParserError);
+        }
+        if ((separator_idx == 0) || (line[separator_idx - 1] != u8' ')) {
+            throwException(Error::ParserError);
+        }
+        std::u8string_view filepath_sv = trim(line.substr(separator_idx + 1));
+        if (filepath_sv.contains('*')) {
+            throwException(Error::ParserError);
+        }
+        std::u8string_view digest_sv = trim(line.substr(0, separator_idx - 1));
+        ret.addEntry(filepath_sv, detail::MD5Hasher::digestFromString(digest_sv));
     }
     return ret;
 }
@@ -67,7 +95,11 @@ void MD5Provider::writeNewFile(FileOutput& file_output, ChecksumFile const& f) c
         out_str.append(u8" *");
         out_str.append(e.path);
         out_str.push_back(u8'\n');
-        file_output.write(std::span<std::byte const>(reinterpret_cast<std::byte const*>(out_str.data()), out_str.size()));
+        size_t ret = file_output.write(
+            std::span<std::byte const>(reinterpret_cast<std::byte const*>(out_str.data()), out_str.size()));
+        if (ret == 0) {
+            throwException(Error::FileIO);
+        }
     }
 }
 

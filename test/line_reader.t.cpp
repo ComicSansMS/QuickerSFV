@@ -3,36 +3,13 @@
 #include <quicker_sfv/error.hpp>
 #include <quicker_sfv/file_io.hpp>
 
+#include <test_file_io.hpp>
+
 #include <cstring>
 #include <ranges>
 #include <utility>
 
 #include <catch.hpp>
-
-namespace {
-struct TestInput : public quicker_sfv::FileInput {
-    std::vector<char> contents;
-    size_t read_idx = 0;
-    size_t fault_after = 0;
-    size_t read_calls = 0;
-
-    TestInput& operator=(std::string_view t) {
-        contents.assign(t.begin(), t.end());
-        return *this;
-    }
-
-    size_t read(std::span<std::byte> read_buffer) override {
-        ++read_calls;
-        size_t const bytes_available = contents.size() - read_idx;
-        if (bytes_available == 0) { return RESULT_END_OF_FILE; }
-        size_t const bytes_to_read = std::min(bytes_available, read_buffer.size());
-        if ((fault_after > 0) && (read_idx + bytes_to_read >= fault_after)) { return 0; }
-        std::memcpy(read_buffer.data(), contents.data() + read_idx, bytes_to_read);
-        read_idx += bytes_to_read;
-        return bytes_to_read;
-    }
-};
-}
 
 TEST_CASE("Line Reader")
 {

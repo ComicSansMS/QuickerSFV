@@ -1,5 +1,7 @@
 #include <quicker_sfv/detail/crc32.hpp>
 
+#include <quicker_sfv/error.hpp>
+
 #include <span>
 
 #include <catch.hpp>
@@ -36,6 +38,8 @@ TEST_CASE("CRC32")
         CHECK(Crc32Hasher::digestFromString(u8"01234567").toString() == u8"01234567");
         CHECK(Crc32Hasher::digestFromString(u8"89ABCDEF").toString() == u8"89abcdef");
         CHECK(Crc32Hasher::digestFromString(u8"89abcdef").toString() == u8"89abcdef");
+        CHECK_THROWS_AS(Crc32Hasher::digestFromString(u8"Some Bogus String"), quicker_sfv::Exception);
+        CHECK_THROWS_AS(Crc32Hasher::digestFromString(u8"89abcdez"), quicker_sfv::Exception);
     }
 
     SECTION("Digest from raw") {

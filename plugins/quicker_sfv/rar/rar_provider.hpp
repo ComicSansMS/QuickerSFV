@@ -15,9 +15,9 @@ private:
 public:
     RarProvider();
     ~RarProvider() override;
-    [[nodiscard]] ProviderCapabilities getCapabilities() const override;
-    [[nodiscard]] std::u8string_view fileExtensions() const override;
-    [[nodiscard]] std::u8string_view fileDescription() const override;
+    [[nodiscard]] ProviderCapabilities getCapabilities() const noexcept override;
+    [[nodiscard]] std::u8string_view fileExtensions() const noexcept override;
+    [[nodiscard]] std::u8string_view fileDescription() const noexcept override;
     [[nodiscard]] HasherPtr createHasher(HasherOptions const& hasher_options) const override;
     [[nodiscard]] Digest digestFromString(std::u8string_view str) const override;
 
