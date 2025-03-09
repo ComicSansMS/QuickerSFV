@@ -281,8 +281,8 @@ if(MSVC)
         $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
         $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -pedantic>
     )
-    target_compile_definitions(QuickerSFV PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-    target_link_libraries(QuickerSFV PRIVATE UxTheme.lib Comctl32.lib quicker_sfv quicker_sfv_client_support)
+    target_compile_definitions(QuickerSFV PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX GDIPVER=0x0110)
+    target_link_libraries(QuickerSFV PRIVATE UxTheme.lib Comctl32.lib gdiplus.lib quicker_sfv quicker_sfv_client_support)
     target_link_options(QuickerSFV PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/MANIFEST:NO>)
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT QuickerSFV)
 

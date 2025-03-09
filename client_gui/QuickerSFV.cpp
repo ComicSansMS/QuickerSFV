@@ -34,6 +34,7 @@
 #include <windowsx.h>
 #include <atlbase.h>
 #include <CommCtrl.h>
+#include <gdiplus.h>
 #include <shellapi.h>
 #include <ShObjIdl_core.h>
 #include <strsafe.h>
@@ -50,6 +51,8 @@
 #include <optional>
 #include <utility>
 #include <vector>
+
+#include <format>
 
 using namespace quicker_sfv;
 using namespace quicker_sfv::gui;
@@ -232,6 +235,8 @@ private:
     LRESULT createUiElements(HWND parent_hwnd);
 
     LRESULT populateListView(NMHDR* nmh);
+    static constexpr UINT_PTR const ListViewSubclassId = 1;
+    LRESULT paintListViewHeader(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
     void UpdateStats();
 
@@ -570,6 +575,15 @@ LRESULT MainWindow::populateListView(NMHDR* nmh) {
                 }
             });
         ListView_RedrawItems(m_hListView, 0, m_listEntries.size());
+        // Force redraw of all headers to clear leftover glyphs
+        RECT header_rect;
+        GetWindowRect(ListView_GetHeader(m_hListView), &header_rect);
+        POINT top_left{ .x = header_rect.left, .y = header_rect.top };
+        POINT bottom_right{ .x = header_rect.right, .y = header_rect.bottom };
+        ScreenToClient(m_hWnd, &top_left);
+        ScreenToClient(m_hWnd, &bottom_right);
+        header_rect = RECT{ .left = top_left.x, .top = top_left.y, .right = bottom_right.x, .bottom = bottom_right.y };
+        InvalidateRect(m_hWnd, &header_rect, FALSE);
     } else if (nmh->code == NM_RCLICK) {
         POINT mouse_cursor;
         if (!GetCursorPos(&mouse_cursor)) { return 0; }
@@ -577,6 +591,38 @@ LRESULT MainWindow::populateListView(NMHDR* nmh) {
                             mouse_cursor.x, mouse_cursor.y, 0, m_hWnd, nullptr)) {
             return 0;
         }
+    }
+    return 0;
+}
+
+LRESULT MainWindow::paintListViewHeader(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    // first draw the header as normal
+    DefSubclassProc(hWnd, uMsg, wParam, lParam);
+
+    // then draw the glyph over it, if we have a sort column
+    if (m_listSort.order != ListViewSort::Order::Original) {
+        HDC hdc = GetDC(hWnd);
+        RECT rect;
+        Header_GetItemRect(hWnd, m_listSort.sort_column, &rect);
+
+        Gdiplus::Point points[3];
+        Gdiplus::Point const top_midpoint((rect.right - rect.left) / 2 + rect.left, rect.top);
+        INT const arrow_width = 10;
+        INT const arrow_height = 5;
+        if (m_listSort.order == ListViewSort::Order::Ascending) {
+            points[0] = top_midpoint + Gdiplus::Point(-(arrow_width / 2), arrow_height);
+            points[1] = top_midpoint;
+            points[2] = top_midpoint + Gdiplus::Point((arrow_width / 2), arrow_height);
+        } else {
+            points[0] = top_midpoint + Gdiplus::Point(-(arrow_width / 2), 0);
+            points[1] = top_midpoint + Gdiplus::Point(0, arrow_height);
+            points[2] = top_midpoint + Gdiplus::Point((arrow_width / 2), 0);
+        }
+        Gdiplus::Graphics gdi(hdc);
+        gdi.SetClip(Gdiplus::Rect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top));
+        Gdiplus::Pen p(Gdiplus::Color(255, 92, 92, 92));
+        gdi.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias8x8);
+        gdi.DrawLines(&p, points, 3);
     }
     return 0;
 }
@@ -831,6 +877,16 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
     }
     ListView_SetImageList(m_hListView, m_imageList, LVSIL_SMALL);
 
+    // Customize ListView header drawing to draw sort glyphs
+    SetWindowSubclass(ListView_GetHeader(m_hListView),
+        [](HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) -> LRESULT {
+            if ((uMsg == WM_PAINT) && uIdSubclass == MainWindow::ListViewSubclassId) {
+                MainWindow* main_window = std::bit_cast<MainWindow*>(dwRefData);
+                return main_window->paintListViewHeader(hWnd, uMsg, wParam, lParam);
+            }
+            return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        }, ListViewSubclassId, std::bit_cast<DWORD_PTR>(this));
+
     m_hPopupMenu = LoadMenu(m_hInstance, MAKEINTRESOURCE(IDR_MENU_POPUP));
     if (!m_hPopupMenu) {
         MessageBox(nullptr, TEXT("Error creating popup menu"), m_windowTitle, MB_ICONERROR);
@@ -1028,6 +1084,14 @@ int APIENTRY WinMain(HINSTANCE hInstance,
     FileProviders file_providers;
     file_providers.loadPlugins();
 
+    ULONG_PTR gdiplus_token;
+    Gdiplus::GdiplusStartupInput gdiplus_startup_in;
+    Gdiplus::GdiplusStartupOutput gdiplus_startup_out;
+    if (Gdiplus::GdiplusStartup(&gdiplus_token, &gdiplus_startup_in, &gdiplus_startup_out) != Gdiplus::Status::Ok) {
+        MessageBox(nullptr, TEXT("Error initializing GDI+"), window_title, MB_ICONERROR | MB_OK);
+        return 0;
+    }
+
     if (!no_gui_window) {
         INITCOMMONCONTROLSEX init_cc_ex{
             .dwSize = sizeof(INITCOMMONCONTROLSEX),
@@ -1107,5 +1171,6 @@ int APIENTRY WinMain(HINSTANCE hInstance,
         }
     }
     scheduler.shutdown();
+    Gdiplus::GdiplusShutdown(gdiplus_token);
     return static_cast<int>(message.wParam);
 }
