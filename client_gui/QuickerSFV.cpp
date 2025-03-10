@@ -596,31 +596,16 @@ LRESULT MainWindow::populateListView(NMHDR* nmh) {
 }
 
 LRESULT MainWindow::paintListViewHeader(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    // first draw the header as normal
-    RECT update_rect_world;
-
-    RECT rect_header;
-    Header_GetItemRect(hWnd, m_listSort.sort_column, &rect_header);
-    GetUpdateRect(hWnd, &update_rect_world, FALSE);
+    // first draw header control as normal, but ensure that the sorting column header is redrawn as well
+    RECT rect;
+    Header_GetItemRect(hWnd, m_listSort.sort_column, &rect);
+    InvalidateRect(hWnd, &rect, FALSE);
 
     DefSubclassProc(hWnd, uMsg, wParam, lParam);
 
     // then draw the glyph over it, if we have a sort column
     if (m_listSort.order != ListViewSort::Order::Original) {
-        //OutputDebugStringA(std::format("Paint {} - W {} {} {} {}\n", std::bit_cast<uint64_t>(hWnd), update_rect_world.left, update_rect_world.right, update_rect_world.top, update_rect_world.bottom).c_str());
         HDC hdc = GetDC(hWnd);
-        // convert world coordinates to client coordintes in update
-        POINT update_rect_points[2]{
-            POINT{ .x = update_rect_world.left, .y = update_rect_world.top },
-            POINT{ .x = update_rect_world.right, .y = update_rect_world.bottom }
-        };
-        LPtoDP(hdc, update_rect_points, 2);
-        RECT const update_rect_client{ .left = update_rect_points[0].x, .top = update_rect_points[0].y, .right = update_rect_points[1].x, .bottom = update_rect_points[1].y };
-        //OutputDebugStringA(std::format("Paint {} - C {} {} {} {}\n", std::bit_cast<uint64_t>(hWnd), update_rect_client.left, update_rect_client.right, update_rect_client.top, update_rect_client.bottom).c_str());
-        Gdiplus::Rect update(update_rect_client.left, update_rect_client.top, (update_rect_client.right - update_rect_client.left), (update_rect_client.bottom - update_rect_client.top));
-
-        RECT rect;
-        Header_GetItemRect(hWnd, m_listSort.sort_column, &rect);
 
         Gdiplus::Point points[3];
         Gdiplus::Point const top_midpoint((rect.right - rect.left) / 2 + rect.left, rect.top);
@@ -636,10 +621,6 @@ LRESULT MainWindow::paintListViewHeader(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
             points[2] = top_midpoint + Gdiplus::Point((arrow_width / 2), 0);
         }
 
-        if (!update.Contains(points[0]) && !update.Contains(points[1]) && !update.Contains(points[2])) {
-            // glyph is not in the updated region; get out
-            return 0;
-        }
         Gdiplus::Graphics gdi(hdc);
         gdi.SetClip(Gdiplus::Rect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top));
         Gdiplus::Pen p(Gdiplus::Color(255, 92, 92, 92));
