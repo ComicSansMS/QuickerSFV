@@ -1,5 +1,6 @@
 #include <quicker_sfv/ui/operation_scheduler.hpp>
 
+#include <quicker_sfv/ui/resource_guard.hpp>
 #include <quicker_sfv/ui/string_helper.hpp>
 #include <quicker_sfv/ui/user_messages.hpp>
 
@@ -240,15 +241,6 @@ void OperationScheduler::worker() {
 }
 
 namespace {
-
-class HandleGuard {
-private:
-    HANDLE h;
-public:
-    explicit HandleGuard(HANDLE handle) :h(handle) {}
-    ~HandleGuard() { CloseHandle(h); }
-    HandleGuard& operator=(HandleGuard&&) = delete;
-};
 
 template<typename T, size_t N>
 class SlidingWindow {

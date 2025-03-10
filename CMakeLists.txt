@@ -236,6 +236,7 @@ if(MSVC)
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/file_dialog.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/operation_scheduler.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/plugin_support.hpp
+        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/resource_guard.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/string_helper.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/user_messages.hpp
     )

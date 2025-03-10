@@ -23,6 +23,7 @@
 #include <quicker_sfv/ui/file_dialog.hpp>
 #include <quicker_sfv/ui/operation_scheduler.hpp>
 #include <quicker_sfv/ui/plugin_support.hpp>
+#include <quicker_sfv/ui/resource_guard.hpp>
 #include <quicker_sfv/ui/string_helper.hpp>
 #include <quicker_sfv/ui/user_messages.hpp>
 
@@ -596,47 +597,60 @@ LRESULT MainWindow::populateListView(NMHDR* nmh) {
 }
 
 LRESULT MainWindow::paintListViewHeader(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    // first draw the header as normal
-    RECT update_rect_world;
-    GetUpdateRect(hWnd, &update_rect_world, FALSE);
-
-    DefSubclassProc(hWnd, uMsg, wParam, lParam);
-
-    // then draw the glyph over it, if we have a sort column
-    if (m_listSort.order != ListViewSort::Order::Original) {
-        HDC hdc = GetDC(hWnd);
-        // convert world coordinates to client coordintes in update
-        POINT update_rect_points[2]{
-            POINT{ .x = update_rect_world.left, .y = update_rect_world.top },
-            POINT{ .x = update_rect_world.right, .y = update_rect_world.bottom }
-        };
-        LPtoDP(hdc, update_rect_points, 2);
-        RECT const update_rect_client{ .left = update_rect_points[0].x, .top = update_rect_points[0].y, .right = update_rect_points[1].x, .bottom = update_rect_points[1].y };
-        Gdiplus::Rect update(update_rect_client.left, update_rect_client.top, (update_rect_client.right - update_rect_client.left), (update_rect_client.bottom - update_rect_client.top));
-
-        RECT rect;
-        Header_GetItemRect(hWnd, m_listSort.sort_column, &rect);
-
-        Gdiplus::Point points[3];
-        Gdiplus::Point const top_midpoint((rect.right - rect.left) / 2 + rect.left, rect.top);
-        INT const arrow_width = 10;
-        INT const arrow_height = 5;
-        if (m_listSort.order == ListViewSort::Order::Ascending) {
-            points[0] = top_midpoint + Gdiplus::Point(-(arrow_width / 2), arrow_height);
-            points[1] = top_midpoint;
-            points[2] = top_midpoint + Gdiplus::Point((arrow_width / 2), arrow_height);
-        } else {
-            points[0] = top_midpoint + Gdiplus::Point(-(arrow_width / 2), 0);
-            points[1] = top_midpoint + Gdiplus::Point(0, arrow_height);
-            points[2] = top_midpoint + Gdiplus::Point((arrow_width / 2), 0);
-        }
-
-        Gdiplus::Graphics gdi(hdc);
-        gdi.SetClip(update);
-        Gdiplus::Pen p(Gdiplus::Color(255, 92, 92, 92));
-        gdi.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias8x8);
-        gdi.DrawLines(&p, points, 3);
+    if (m_listSort.order == ListViewSort::Order::Original) {
+        return DefSubclassProc(hWnd, uMsg, wParam, lParam);
     }
+
+    // first draw the entirety of the header control as normal, but redirect drawing to a back buffer to combat flickering
+    RECT header_rect;
+    if (!GetClientRect(hWnd, &header_rect)) { return 0; }
+    if (!InvalidateRect(hWnd, &header_rect, TRUE)) { return 0; }
+
+    HDC hdc = GetDC(hWnd);
+    if (!hdc) { return 0; }
+    ResourceGuard guard_hdc(hdc, [hWnd](HDC h) { ReleaseDC(hWnd, h); });
+    int const header_width = header_rect.right - header_rect.left;
+    int const header_height = header_rect.bottom - header_rect.top;
+    HBITMAP back_buffer_bmp = CreateCompatibleBitmap(hdc, header_width, header_height);
+    if (!back_buffer_bmp) { return 0; }
+    ResourceGuard guard_back_buffer_bmp(back_buffer_bmp, DeleteObject);
+    HDC back_buffer_dc = CreateCompatibleDC(hdc);
+    if (!back_buffer_dc) { return 0; }
+    ResourceGuard guard_back_buffer_dc(back_buffer_dc, DeleteDC);
+
+    if (!SelectObject(back_buffer_dc, back_buffer_bmp)) { return 0; }
+    DefSubclassProc(hWnd, uMsg, std::bit_cast<WPARAM>(back_buffer_dc), lParam);
+
+    // then draw the glyph over it in the back buffer
+    RECT rect;
+    Header_GetItemRect(hWnd, m_listSort.sort_column, &rect);
+    Gdiplus::Rect update(rect.left, rect.top, (rect.right - rect.left), (rect.bottom - rect.top));
+
+    Gdiplus::Point const top_midpoint((rect.right - rect.left) / 2 + rect.left, rect.top);
+    INT const arrow_width = 10;
+    INT const arrow_height = 5;
+    Gdiplus::Point points[3];
+    if (m_listSort.order == ListViewSort::Order::Ascending) {
+        points[0] = top_midpoint + Gdiplus::Point(-(arrow_width / 2), arrow_height);
+        points[1] = top_midpoint;
+        points[2] = top_midpoint + Gdiplus::Point((arrow_width / 2), arrow_height);
+    } else {
+        points[0] = top_midpoint + Gdiplus::Point(-(arrow_width / 2), 0);
+        points[1] = top_midpoint + Gdiplus::Point(0, arrow_height);
+        points[2] = top_midpoint + Gdiplus::Point((arrow_width / 2), 0);
+    }
+
+    Gdiplus::Graphics gdi(back_buffer_dc);
+    if (gdi.SetClip(update) != Gdiplus::Status::Ok) { return 0; }
+    Gdiplus::Pen p(Gdiplus::Color(255, 92, 92, 92));
+    if (gdi.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias8x8) != Gdiplus::Status::Ok) { return 0; }
+    if (gdi.DrawLines(&p, points, 3) != Gdiplus::Status::Ok) { return 0; }
+
+    // finally, blit the entire back buffer into the client window
+    if (!BitBlt(hdc, header_rect.left, header_rect.top, header_width, header_height, back_buffer_dc, 0, 0, SRCCOPY)) {
+        return 0;
+    }
+
     return 0;
 }
 
@@ -1034,6 +1048,7 @@ void MainWindow::writeResultsToFile() const {
     // all operations in here are best effort, as we have no sensible way to report errors
     HANDLE fout = CreateFile(toWcharStr(m_outFile.c_str()), GENERIC_WRITE, FILE_SHARE_READ, nullptr,
                              CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    HandleGuard guard_fout(fout);
     if (fout == INVALID_HANDLE_VALUE) {
         return;
     }
@@ -1053,7 +1068,6 @@ void MainWindow::writeResultsToFile() const {
         msg.push_back(u8'\n');
         if (!WriteFile(fout, msg.data(), static_cast<DWORD>(msg.size()), nullptr, nullptr)) { break; }
     }
-    CloseHandle(fout);
 }
 
 void MainWindow::UpdateStats() {
