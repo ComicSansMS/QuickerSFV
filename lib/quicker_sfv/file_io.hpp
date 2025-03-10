@@ -2,6 +2,7 @@
 #define INCLUDE_GUARD_QUICKER_SFV_FILE_IO_HPP
 
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <span>
 
