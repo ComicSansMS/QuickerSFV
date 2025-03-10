@@ -596,16 +596,26 @@ LRESULT MainWindow::populateListView(NMHDR* nmh) {
 }
 
 LRESULT MainWindow::paintListViewHeader(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    // first draw header control as normal, but ensure that the sorting column header is redrawn as well
-    RECT rect;
-    Header_GetItemRect(hWnd, m_listSort.sort_column, &rect);
-    InvalidateRect(hWnd, &rect, FALSE);
+    // first draw the header as normal
+    RECT update_rect_world;
+    GetUpdateRect(hWnd, &update_rect_world, FALSE);
 
     DefSubclassProc(hWnd, uMsg, wParam, lParam);
 
     // then draw the glyph over it, if we have a sort column
     if (m_listSort.order != ListViewSort::Order::Original) {
         HDC hdc = GetDC(hWnd);
+        // convert world coordinates to client coordintes in update
+        POINT update_rect_points[2]{
+            POINT{ .x = update_rect_world.left, .y = update_rect_world.top },
+            POINT{ .x = update_rect_world.right, .y = update_rect_world.bottom }
+        };
+        LPtoDP(hdc, update_rect_points, 2);
+        RECT const update_rect_client{ .left = update_rect_points[0].x, .top = update_rect_points[0].y, .right = update_rect_points[1].x, .bottom = update_rect_points[1].y };
+        Gdiplus::Rect update(update_rect_client.left, update_rect_client.top, (update_rect_client.right - update_rect_client.left), (update_rect_client.bottom - update_rect_client.top));
+
+        RECT rect;
+        Header_GetItemRect(hWnd, m_listSort.sort_column, &rect);
 
         Gdiplus::Point points[3];
         Gdiplus::Point const top_midpoint((rect.right - rect.left) / 2 + rect.left, rect.top);
@@ -622,7 +632,7 @@ LRESULT MainWindow::paintListViewHeader(HWND hWnd, UINT uMsg, WPARAM wParam, LPA
         }
 
         Gdiplus::Graphics gdi(hdc);
-        gdi.SetClip(Gdiplus::Rect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top));
+        gdi.SetClip(update);
         Gdiplus::Pen p(Gdiplus::Color(255, 92, 92, 92));
         gdi.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias8x8);
         gdi.DrawLines(&p, points, 3);
