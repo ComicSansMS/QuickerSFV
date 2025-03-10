@@ -246,6 +246,7 @@ public:
     void writeResultsToFile() const;
 
     void setOptionUseAvx512(bool use_avx512);
+    void setOptionSaveConfiguration(bool save_config);
 
     void loadConfigurationFromRegistry();
     void saveConfigurationToRegistry();
@@ -456,6 +457,8 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 return 0;
             } else if (LOWORD(wParam) == ID_OPTIONS_USEAVX512) {
                 setOptionUseAvx512(!m_options.has_avx512);
+            } else if (LOWORD(wParam) == ID_OPTIONS_SAVECONFIGURATION) {
+                setOptionSaveConfiguration(!m_saveConfigToRegistry);
             } else if (LOWORD(wParam) == ID_CREATE_FROM_FOLDER) {
                 if (auto const opt = OpenFolder(hWnd); opt) {
                     auto const& [folder_path, _] = *opt;
@@ -749,7 +752,6 @@ BOOL MainWindow::createMainWindow(HINSTANCE hInstance, int nCmdShow,
         MessageBox(nullptr, TEXT("Error creating menu"), window_title, MB_ICONERROR);
         return FALSE;
     }
-    EnableMenuItem(m_hMenu, ID_OPTIONS_UPDATEDB, MF_BYCOMMAND | MF_DISABLED);
     if (quicker_sfv::supportsAvx512()) {
         MENUITEMINFO mii{ .cbSize = sizeof(MENUITEMINFO), .fMask = MIIM_STATE, .fState = MFS_ENABLED | MFS_CHECKED };
         SetMenuItemInfo(m_hMenu, ID_OPTIONS_USEAVX512, FALSE, &mii);
@@ -1103,14 +1105,36 @@ void MainWindow::setOptionUseAvx512(bool use_avx512) {
     m_options.has_avx512 = use_avx512;
 }
 
+void MainWindow::setOptionSaveConfiguration(bool save_config) {
+    if (!save_config) {
+        if (MessageBox(m_hWnd, TEXT("Do you want to remove the current saved configuration?"), TEXT("QuickerSFV"),
+                       MB_ICONQUESTION | MB_YESNO) == IDYES) {
+            HKEY reg_key;
+            if (RegOpenKeyEx(HKEY_CURRENT_USER, TEXT("Software"), 0, KEY_SET_VALUE | DELETE, &reg_key) == ERROR_SUCCESS) {
+                RegDeleteTree(reg_key, TEXT("QuickerSFV"));
+                RegCloseKey(reg_key);
+            }
+        }
+    }
+    MENUITEMINFO mii{ .cbSize = sizeof(MENUITEMINFO), .fMask = MIIM_STATE };
+    GetMenuItemInfo(m_hMenu, ID_OPTIONS_SAVECONFIGURATION, FALSE, &mii);
+    if (save_config) {
+        mii.fState |= MFS_CHECKED;
+    } else {
+        mii.fState &= ~MFS_CHECKED;
+    }
+    SetMenuItemInfo(m_hMenu, ID_OPTIONS_SAVECONFIGURATION, FALSE, &mii);
+    m_saveConfigToRegistry = save_config;
+}
+
 void MainWindow::loadConfigurationFromRegistry() {
     HKEY reg_key;
     if (RegOpenKeyEx(HKEY_CURRENT_USER, TEXT("Software\\QuickerSFV"), 0, KEY_WRITE | KEY_READ, &reg_key) != ERROR_SUCCESS) {
-        MessageBoxA(m_hWnd, "No registry", "T", MB_OK);
+        // no registry key found
         return;
     }
     ResourceGuard guar_reg_key(reg_key, RegCloseKey);
-    m_saveConfigToRegistry = true;
+    setOptionSaveConfiguration(true);
     WindowPlacementConfig placement{};
     DWORD size = sizeof(placement);
     if ((RegGetValue(reg_key, nullptr, TEXT("WindowDimensions"), RRF_RT_REG_BINARY, nullptr, &placement, &size) == ERROR_SUCCESS) &&
