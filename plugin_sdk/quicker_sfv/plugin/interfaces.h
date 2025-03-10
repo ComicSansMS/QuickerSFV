@@ -20,6 +20,7 @@ typedef enum tag_QuickerSFV_CallbackResult {
     QuickerSFV_CallbackResult_Ok            = 1,
     QuickerSFV_CallbackResult_MoreData      = 2,
     QuickerSFV_CallbackResult_Failed        = -1,
+    QuickerSFV_CallbackResult_InvalidArg    = -2,
 } QuickerSFV_CallbackResult;
 
 typedef enum tag_QuickerSFV_ProviderCapabilities {
@@ -27,6 +28,12 @@ typedef enum tag_QuickerSFV_ProviderCapabilities {
     QuickerSFV_ProviderCapabilities_VerifyOnly = 1,
     QuickerSFV_ProviderCapabilities_Reserved   = INT32_MAX,
 } QuickerSFV_ProviderCapabilities;
+
+typedef enum tag_QuickerSFV_SeekStart {
+    QuickerSFV_SeekStart_CurrentPosition = 1,
+    QuickerSFV_SeekStart_FileStart       = 2,
+    QuickerSFV_SeekStart_FileEnd         = 3
+} QuickerSFV_SeekStart;
 
 typedef struct tag_QuickerSFV_GUID {
     uint32_t b1;
@@ -127,17 +134,26 @@ struct IQuickerSFV_ChecksumProvider_Vtbl {
             char* out_read_buffer,
             size_t read_buffer_size,
             size_t* out_bytes_read
-            ),
+        ),
+        QuickerSFV_CallbackResult (*seek_file_binary)(
+            QuickerSFV_FileReadProviderP read_provider,
+            int64_t offset,
+            QuickerSFV_SeekStart seek_start
+        ),
+        QuickerSFV_CallbackResult (*tell_file_binary)(
+            QuickerSFV_FileReadProviderP read_provider,
+            int64_t* out_position
+        ),
         QuickerSFV_CallbackResult (*read_line_text)(
             QuickerSFV_FileReadProviderP read_provider,
             char const** out_line,
             size_t* out_line_size
-            ),
+        ),
         QuickerSFV_CallbackResult (*new_entry_callback)(
             QuickerSFV_FileReadProviderP read_provider,
             char const* filename,
             char const* digest_string
-            )
+        )
     );
     QuickerSFV_Result (*WriteNewFile)(
         IQuickerSFV_ChecksumProvider* self,
@@ -224,17 +240,26 @@ struct IChecksumProvider {
             char* out_read_buffer,
             size_t read_buffer_size,
             size_t* out_bytes_read
-            ),
+        ),
+        QuickerSFV_CallbackResult (*seek_file_binary)(
+            QuickerSFV_FileReadProviderP read_provider,
+            int64_t offset,
+            QuickerSFV_SeekStart seek_start
+        ),
+        QuickerSFV_CallbackResult (*tell_file_binary)(
+            QuickerSFV_FileReadProviderP read_provider,
+            int64_t* out_position
+        ),
         QuickerSFV_CallbackResult (*read_line_text)(
             QuickerSFV_FileReadProviderP read_provider,
             char const** out_line,
             size_t* out_line_size
-            ),
+        ),
         QuickerSFV_CallbackResult (*new_entry_callback)(
             QuickerSFV_FileReadProviderP read_provider,
             char const* filename,
             char const* digest_string
-            )
+        )
     ) = 0;
     virtual QuickerSFV_Result WriteNewFile(
         QuickerSFV_FileWriteProviderP write_provider,

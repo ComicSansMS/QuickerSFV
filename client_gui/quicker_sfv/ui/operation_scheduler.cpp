@@ -48,6 +48,30 @@ public:
         }
         return bytes_read;
     }
+
+    int64_t seek(int64_t offset, SeekStart seek_start) {
+        LARGE_INTEGER dist;
+        dist.QuadPart = offset;
+        LARGE_INTEGER out;
+        DWORD const move_method = [](SeekStart s) -> DWORD {
+            if (s == SeekStart::CurrentPosition) {
+                return FILE_CURRENT;
+            } else if (s == SeekStart::FileEnd) {
+                return FILE_END;
+            } else {
+                return FILE_BEGIN;
+            }
+        }(seek_start);
+        if (SetFilePointerEx(m_fin, dist, &out, move_method) == 0) {
+            return -1;
+        }
+        m_eof = (SeekStart::CurrentPosition == SeekStart::FileEnd);
+        return out.QuadPart;
+    }
+
+    int64_t tell() {
+        return seek(0, SeekStart::CurrentPosition);
+    }
 };
 
 

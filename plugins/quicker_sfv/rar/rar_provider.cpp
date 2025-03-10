@@ -75,6 +75,15 @@ public:
         return ret;
     }
 
+    int64_t seek(int64_t offset, SeekStart seek_start) override {
+        reset();
+        return m_upstream->seek(offset, seek_start);
+    }
+
+    int64_t tell() override {
+        return m_upstream->tell();
+    }
+
     std::span<std::byte const> data() const {
         return m_data;
     }

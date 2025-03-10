@@ -40,6 +40,29 @@ public:
      *         with RESULT_END_OF_FILE.
      */
     virtual size_t read(std::span<std::byte> read_buffer) = 0;
+
+    /** Possible start positions for a seek() operation.
+     */
+    enum class SeekStart {
+        CurrentPosition,    ///< The current value of the file read pointer.
+        FileStart,          ///< The start of the file.
+        FileEnd,            ///< The end of the file.
+    };
+
+    /** Sets the value of the file read pointer.
+     * The file pointer
+     * @param offset The offset of the new file pointer position from seek_start.
+     * @param seek_start Start position for the file pointer calculation.
+     * @return On success, returns the new value of the file read pointer.
+     *         On error, returns -1.
+     */
+    virtual int64_t seek(int64_t offset, SeekStart seek_start) = 0;
+
+    /** Retrieves the current value of the file read pointer.
+     * @return On success, the current position of the file pointer in bytes.
+     *         On error, returns -1.
+     */
+    virtual int64_t tell() = 0;
 };
 
 }

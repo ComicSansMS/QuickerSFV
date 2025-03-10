@@ -33,6 +33,25 @@ struct TestInput : public quicker_sfv::FileInput {
         read_idx += bytes_to_read;
         return bytes_to_read;
     }
+
+    int64_t seek(int64_t offset, SeekStart seek_start) override {
+        int64_t base_index = 0;
+        if (seek_start == SeekStart::CurrentPosition) {
+            base_index = read_idx;
+        } else if (seek_start == SeekStart::FileEnd) {
+            base_index = contents.size();
+        }
+        int64_t const new_index = base_index + offset;
+        if ((new_index < 0) || (new_index > static_cast<int64_t>(contents.size()))) {
+            return -1;
+        }
+        read_idx = new_index;
+        return new_index;
+    }
+
+    int64_t tell() override {
+        return read_idx;
+    }
 };
 
 struct TestOutput : public quicker_sfv::FileOutput {

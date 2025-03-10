@@ -244,6 +244,29 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
                 *out_bytes_read = bytes_read;
                 return QuickerSFV_CallbackResult_MoreData;
             },
+            [](QuickerSFV_FileReadProviderP read_provider, int64_t offset, QuickerSFV_SeekStart seek_start) -> QuickerSFV_CallbackResult {
+                ReadInput* ri = reinterpret_cast<ReadInput*>(read_provider);
+                quicker_sfv::FileInput::SeekStart s;
+                if (seek_start == QuickerSFV_SeekStart_CurrentPosition) {
+                    s = quicker_sfv::FileInput::SeekStart::CurrentPosition;
+                } else if (seek_start == QuickerSFV_SeekStart_FileStart) {
+                    s = quicker_sfv::FileInput::SeekStart::FileStart;
+                } else if (seek_start == QuickerSFV_SeekStart_FileEnd) {
+                    s = quicker_sfv::FileInput::SeekStart::FileEnd;
+                } else {
+                    return QuickerSFV_CallbackResult_InvalidArg;
+                }
+                int64_t ret = ri->file_input->seek(offset, s);
+                if (ret < 0) { return QuickerSFV_CallbackResult_Failed; }
+                return QuickerSFV_CallbackResult_Ok;
+            },
+            [](QuickerSFV_FileReadProviderP read_provider, int64_t* out_position) -> QuickerSFV_CallbackResult {
+                ReadInput* ri = reinterpret_cast<ReadInput*>(read_provider);
+                int64_t const res = ri->file_input->tell();
+                if (res < 0) { return QuickerSFV_CallbackResult_Failed; }
+                *out_position = res;
+                return QuickerSFV_CallbackResult_Ok;
+            },
             [](QuickerSFV_FileWriteProviderP read_provider, char const** out_line, size_t* out_line_size) -> QuickerSFV_CallbackResult {
                 ReadInput* ri = reinterpret_cast<ReadInput*>(read_provider);
                 if (ri->line_reader.done()) { return QuickerSFV_CallbackResult_Ok; }

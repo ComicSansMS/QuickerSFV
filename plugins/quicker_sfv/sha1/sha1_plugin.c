@@ -234,7 +234,16 @@ static QuickerSFV_Result IQuickerSFV_ChecksumProvider_ReadFromFile(IQuickerSFV_C
             char* out_read_buffer,
             size_t read_buffer_size,
             size_t* out_bytes_read
-            ),
+        ),
+        QuickerSFV_CallbackResult (*seek_file_binary)(
+            QuickerSFV_FileReadProviderP read_provider,
+            int64_t offset,
+            QuickerSFV_SeekStart seek_start
+        ),
+        QuickerSFV_CallbackResult (*tell_file_binary)(
+            QuickerSFV_FileReadProviderP read_provider,
+            int64_t* out_position
+        ),
         QuickerSFV_CallbackResult (*read_line_text)(
             QuickerSFV_FileReadProviderP read_provider,
             char const** out_line,
@@ -249,6 +258,8 @@ static QuickerSFV_Result IQuickerSFV_ChecksumProvider_ReadFromFile(IQuickerSFV_C
 {
     UNREFERENCED_PARAMETER(self);
     UNREFERENCED_PARAMETER(read_file_binary);
+    UNREFERENCED_PARAMETER(seek_file_binary);
+    UNREFERENCED_PARAMETER(tell_file_binary);
     char const* line;
     size_t line_size;
     QuickerSFV_CallbackResult res;
