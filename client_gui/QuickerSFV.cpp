@@ -203,6 +203,18 @@ private:
     OperationScheduler* m_scheduler;
 
     std::u16string m_outFile;
+
+    struct WindowPlacementConfig {
+        int32_t pos_x;
+        int32_t pos_y;
+        int32_t width;
+        int32_t height;
+        int32_t name_column_width;
+        int32_t checksum_column_width;
+        int32_t status_column_width;
+    };
+
+    bool m_saveConfigToRegistry;
 public:
     explicit MainWindow(FileProviders& file_providers, OperationScheduler& scheduler);
 
@@ -232,6 +244,11 @@ public:
 
     void setOutFile(std::u16string out_file);
     void writeResultsToFile() const;
+
+    void setOptionUseAvx512(bool use_avx512);
+
+    void loadConfigurationFromRegistry();
+    void saveConfigurationToRegistry();
 private:
     LRESULT createUiElements(HWND parent_hwnd);
 
@@ -260,7 +277,7 @@ MainWindow::MainWindow(FileProviders& file_providers, OperationScheduler& schedu
      m_hTextFieldRight(nullptr), m_hListView(nullptr), m_imageList(nullptr), m_hPopupMenu(nullptr),
      m_stats{}, m_listSort{ .sort_column = 0, .order = ListViewSort::Order::Original },
      m_options{ .has_sse42 = quicker_sfv::supportsSse42(), .has_avx512 = false},
-     m_fileProviders(&file_providers), m_scheduler(&scheduler)
+     m_fileProviders(&file_providers), m_scheduler(&scheduler), m_saveConfigToRegistry(false)
 {
 }
 
@@ -406,6 +423,7 @@ INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (msg == WM_DESTROY) {
         m_scheduler->post(Operation::Cancel{});
+        if (m_saveConfigToRegistry) { saveConfigurationToRegistry(); }
         PostQuitMessage(0);
         return 0;
     } else if (msg == WM_CREATE) {
@@ -437,16 +455,7 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 }
                 return 0;
             } else if (LOWORD(wParam) == ID_OPTIONS_USEAVX512) {
-                MENUITEMINFO mii{ .cbSize = sizeof(MENUITEMINFO), .fMask = MIIM_STATE };
-                GetMenuItemInfo(m_hMenu, ID_OPTIONS_USEAVX512, FALSE, &mii);
-                if ((mii.fState & MFS_CHECKED) != 0) {
-                    mii.fState &= ~MFS_CHECKED;
-                    m_options.has_avx512 = false;
-                } else {
-                    mii.fState |= MFS_CHECKED;
-                    m_options.has_avx512 = true;
-                }
-                SetMenuItemInfo(m_hMenu, ID_OPTIONS_USEAVX512, FALSE, &mii);
+                setOptionUseAvx512(!m_options.has_avx512);
             } else if (LOWORD(wParam) == ID_CREATE_FROM_FOLDER) {
                 if (auto const opt = OpenFolder(hWnd); opt) {
                     auto const& [folder_path, _] = *opt;
@@ -744,6 +753,7 @@ BOOL MainWindow::createMainWindow(HINSTANCE hInstance, int nCmdShow,
     if (quicker_sfv::supportsAvx512()) {
         MENUITEMINFO mii{ .cbSize = sizeof(MENUITEMINFO), .fMask = MIIM_STATE, .fState = MFS_ENABLED | MFS_CHECKED };
         SetMenuItemInfo(m_hMenu, ID_OPTIONS_USEAVX512, FALSE, &mii);
+        m_options.has_avx512 = true;
     }
 
     static_assert((sizeof(MainWindow*) == sizeof(LPARAM)) && (sizeof(MainWindow*) == sizeof(LPVOID)));
@@ -1081,6 +1091,71 @@ void MainWindow::UpdateStats() {
     Static_SetText(m_hTextFieldRight, formatString(buffer, buffer_size, TEXT("Bad: %d\nMissing: %d"), m_stats.bad, m_stats.missing));
 }
 
+void MainWindow::setOptionUseAvx512(bool use_avx512) {
+    MENUITEMINFO mii{ .cbSize = sizeof(MENUITEMINFO), .fMask = MIIM_STATE };
+    GetMenuItemInfo(m_hMenu, ID_OPTIONS_USEAVX512, FALSE, &mii);
+    if (use_avx512) {
+        mii.fState |= MFS_CHECKED;
+    } else {
+        mii.fState &= ~MFS_CHECKED;
+    }
+    SetMenuItemInfo(m_hMenu, ID_OPTIONS_USEAVX512, FALSE, &mii);
+    m_options.has_avx512 = use_avx512;
+}
+
+void MainWindow::loadConfigurationFromRegistry() {
+    HKEY reg_key;
+    if (RegOpenKeyEx(HKEY_CURRENT_USER, TEXT("Software\\QuickerSFV"), 0, KEY_WRITE | KEY_READ, &reg_key) != ERROR_SUCCESS) {
+        MessageBoxA(m_hWnd, "No registry", "T", MB_OK);
+        return;
+    }
+    ResourceGuard guar_reg_key(reg_key, RegCloseKey);
+    m_saveConfigToRegistry = true;
+    WindowPlacementConfig placement{};
+    DWORD size = sizeof(placement);
+    if ((RegGetValue(reg_key, nullptr, TEXT("WindowDimensions"), RRF_RT_REG_BINARY, nullptr, &placement, &size) == ERROR_SUCCESS) &&
+        (size == sizeof(placement))) {
+        SetWindowPos(m_hWnd, nullptr, placement.pos_x, placement.pos_y, placement.width, placement.height, SWP_ASYNCWINDOWPOS);
+        ListView_SetColumnWidth(m_hListView, 0, placement.name_column_width);
+        ListView_SetColumnWidth(m_hListView, 1, placement.checksum_column_width);
+        ListView_SetColumnWidth(m_hListView, 2, placement.status_column_width);
+    }
+    if (m_options.has_avx512) {
+        DWORD use_avx;
+        size = sizeof(DWORD);
+        if ((RegGetValue(reg_key, nullptr, TEXT("UseAvx"), RRF_RT_REG_DWORD, nullptr, &use_avx, &size) == ERROR_SUCCESS) &&
+            (size == sizeof(DWORD))) {
+            if (use_avx == 1) {
+                setOptionUseAvx512(true);
+            } else if (use_avx == 0) {
+                setOptionUseAvx512(false);
+            }
+        }
+    }
+}
+
+void MainWindow::saveConfigurationToRegistry() {
+    HKEY reg_key;
+    if (RegCreateKeyEx(HKEY_CURRENT_USER, TEXT("Software\\QuickerSFV"), 0, nullptr, 0, KEY_WRITE, nullptr, &reg_key, nullptr) != ERROR_SUCCESS) {
+        return;
+    }
+    ResourceGuard guard_reg_key(reg_key, RegCloseKey);
+    if (RECT rect; GetWindowRect(m_hWnd, &rect)) {
+        WindowPlacementConfig const placement{
+            .pos_x = rect.left,
+            .pos_y = rect.top,
+            .width = (rect.right - rect.left),
+            .height = (rect.bottom - rect.top),
+            .name_column_width = ListView_GetColumnWidth(m_hListView, 0),
+            .checksum_column_width = ListView_GetColumnWidth(m_hListView, 1),
+            .status_column_width = ListView_GetColumnWidth(m_hListView, 2),
+        };
+        RegSetValueEx(reg_key, TEXT("WindowDimensions"), 0, REG_BINARY, reinterpret_cast<BYTE const*>(&placement), sizeof(placement));
+    }
+    DWORD use_avx = (m_options.has_avx512) ? 1 : 0;
+    RegSetValueEx(reg_key, TEXT("UseAvx"), 0, REG_DWORD, reinterpret_cast<BYTE const*>(&use_avx), sizeof(DWORD));
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     MainWindow* main_window_ptr = std::bit_cast<MainWindow*>(GetWindowLongPtr(hWnd, 0));
     if (!main_window_ptr) {
@@ -1162,6 +1237,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
             return 0;
         }
     }
+    main_window.loadConfigurationFromRegistry();
 
     scheduler.start();
 
