@@ -16,7 +16,7 @@ Major Features
 Why update from QuickSFV?
 -------------------------
 QuickSFV is a great and well-established software, but after 15 years without any updates, it is starting to show its age.
-The checksum algorithms it uses are not making use of the latest CPU features and their performance is no longer on-par with newer libraries.
+The checksum algorithms it uses are not making use of the latest CPU features and [their performance is no longer on-par](#benchmarks) with newer libraries.
 While this was not an issue in the days of slow HDDs, its impact becomes apparent when checking files from fast SSDs, where the disk I/O is no longer the sole bottleneck of the verification time.
 QuickerSFV achieves significantly higher bandwidth during verification, cutting verification times to a fraction of what QuickSFV is able to achieve.
 
@@ -24,11 +24,28 @@ QuickerSFV also has proper support for filenames commonly encountered on modern 
 
 Compatibility
 -------------
-The goal is feature-parity with QuickSFV, so that QuickerSFV can act as a drop-in replacement.
-If you find a feature or workflow from QuickSFV that is missing, feel free to [open an issue](https://github.com/ComicSansMS/QuickerSFV/issues).
+The goal is feature-parity with QuickSFV, so that QuickerSFV can act as a drop-in replacement. That means you should be able to literally replace the `QuickSFV.exe` in your local installation with QuickerSFV and everything just works faster.
+
+There are a few restrictions currently:
+   
+   - The "Previously Verified Database" feature of QuickSFV is not supported.
+   - Currently not the following file formats that QuickSFV supported are not supported in QuickerSFV:
+       - `.txt` This file extension is too ambiguous to meaningfully associate with a specific format.
+       - `.ckz` I could not find a file specification for this format. If someone can supply me with an example file, I would consider adding support. It seems to be a legacy file format that is no longer in use.
+       - `.csv` Same as `.txt`, it is unclear which format to associate with this extension.
+       - `.par` Par seems to be a legacy format that is no longer in use. Support for `.par2` might be added with a plugin in the future.
+       - Backwards compatibility with WIN-SFV32 for `.sfv` files. WIN-SFV32 seems to be no longer in use.
+   - The QuickSFV .ini configuration file is not supported. Placing .ini files in the working directory of the .exe file is no longer considered good practice for Windows applications. QuickerSFV allows saving its configuration in the Registry instead.
+
+If you find one of these restrictions unacceptable or you are missing feature or workflow from QuickSFV, feel free to [open an issue](https://github.com/ComicSansMS/QuickerSFV/issues).
 
 Benchmarks
 ----------
+On HDDs QuickSFV and QuickerSFV both perform about the same, in the order of the speed of the drive. The checksum calculation is purely I/O-bound.
+
+On faster SSDs and for files which are hot in Windows' disk cache, QuickerSFV is able to significantly outperform QuickSFV. A benchmark on a Samsung SSD 990 Pro 2TB, running on a Ryzen 9 7950X3D CPU shows QuickerSFV being roughly 9x faster for CRC and roughly 3x faster for MD5 calculations. This comparison is between QuickSFV v2.36 and QuickerSFV v0.1 on Windows 11.
+
+<img src="https://github.com/user-attachments/assets/cdae905d-5595-4a5d-af29-f04d05e24f16" alt="Benchmark Bar Plot" width="640" height="480" />
 
 
 Development Status
