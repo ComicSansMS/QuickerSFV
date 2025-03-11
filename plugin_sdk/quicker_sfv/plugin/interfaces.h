@@ -4,6 +4,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef _MSC_VER
+#   define QUICKER_SFV_PLUGIN_CALL __stdcall
+#else
+#   define QUICKER_SFV_PLUGIN_CALL
+#endif
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -62,16 +69,16 @@ typedef struct tag_IQuickerSFV_Hasher {
 } IQuickerSFV_Hasher;
 
 struct IQuickerSFV_Hasher_Vtbl {
-    QuickerSFV_Result (*AddData)(
+    QuickerSFV_Result (QUICKER_SFV_PLUGIN_CALL *AddData)(
         IQuickerSFV_Hasher* self,
         char const* data,
         size_t size
     );
-    QuickerSFV_Result (*Finalize)(
+    QuickerSFV_Result (QUICKER_SFV_PLUGIN_CALL *Finalize)(
         IQuickerSFV_Hasher* self,
         QuickerSFV_DigestP out_digest
     );
-    QuickerSFV_Result (*Reset)(
+    QuickerSFV_Result (QUICKER_SFV_PLUGIN_CALL *Reset)(
         IQuickerSFV_Hasher* self
     );
 };
@@ -94,39 +101,39 @@ typedef struct tag_IQuickerSFV_ChecksumProvider {
 } IQuickerSFV_ChecksumProvider;
 
 struct IQuickerSFV_ChecksumProvider_Vtbl {
-    QuickerSFV_Result (*Delete)(
+    QuickerSFV_Result (QUICKER_SFV_PLUGIN_CALL *Delete)(
         IQuickerSFV_ChecksumProvider* self
     );
-    QuickerSFV_Result (*GetProviderCapabilities)(
+    QuickerSFV_Result (QUICKER_SFV_PLUGIN_CALL*GetProviderCapabilities)(
         IQuickerSFV_ChecksumProvider* self,
         QuickerSFV_ProviderCapabilities* out_capabilities
     );
-    QuickerSFV_Result (*FileExtension)(
+    QuickerSFV_Result (QUICKER_SFV_PLUGIN_CALL *FileExtension)(
         IQuickerSFV_ChecksumProvider* self,
         char* out_utf8_str,
         size_t* in_out_size
     );
-    QuickerSFV_Result (*FileDescription)(
+    QuickerSFV_Result (QUICKER_SFV_PLUGIN_CALL *FileDescription)(
         IQuickerSFV_ChecksumProvider* self,
         char* out_utf8_str,
         size_t* in_out_size
     );
-    QuickerSFV_Result (*CreateHasher)(
+    QuickerSFV_Result (QUICKER_SFV_PLUGIN_CALL *CreateHasher)(
         IQuickerSFV_ChecksumProvider* self,
         IQuickerSFV_Hasher** out_ihasher,
         struct QuickerSFV_HasherOptions* opts
     );
-    QuickerSFV_Result (*DeleteHasher)(
+    QuickerSFV_Result (QUICKER_SFV_PLUGIN_CALL *DeleteHasher)(
         IQuickerSFV_ChecksumProvider* self,
         IQuickerSFV_Hasher* ihasher
     );
-    QuickerSFV_Result (*DigestFromString)(
+    QuickerSFV_Result (QUICKER_SFV_PLUGIN_CALL *DigestFromString)(
         IQuickerSFV_ChecksumProvider* self,
         QuickerSFV_DigestP out_digest,
         char const* string_data,
         size_t string_size
     );
-    QuickerSFV_Result (*ReadFromFile)(
+    QuickerSFV_Result (QUICKER_SFV_PLUGIN_CALL *ReadFromFile)(
         IQuickerSFV_ChecksumProvider* self,
         QuickerSFV_FileReadProviderP read_provider,
         QuickerSFV_CallbackResult (*read_file_binary)(
@@ -155,7 +162,7 @@ struct IQuickerSFV_ChecksumProvider_Vtbl {
             char const* digest_string
         )
     );
-    QuickerSFV_Result (*WriteNewFile)(
+    QuickerSFV_Result (QUICKER_SFV_PLUGIN_CALL *WriteNewFile)(
         IQuickerSFV_ChecksumProvider* self,
         QuickerSFV_FileWriteProviderP write_provider,
         QuickerSFV_CallbackResult (*Write)(
@@ -181,59 +188,43 @@ struct IQuickerSFV_ChecksumProvider_Vtbl {
 
 namespace quicker_sfv::plugin_interface {
 
-struct IFileOutput {
-    virtual QuickerSFV_Result Write(
-        char const* in_buffer,
-        size_t in_buffer_size,
-        size_t* out_bytes_written
-    ) = 0;
-};
-
-struct IFileInput {
-    virtual QuickerSFV_Result Read(
-        char* out_buffer,
-        size_t out_buffer_size,
-        size_t* out_bytes_read
-    ) = 0;
-};
-
 struct IHasher {
-    virtual QuickerSFV_Result AddData(
+    virtual QuickerSFV_Result QUICKER_SFV_PLUGIN_CALL AddData(
         char const* data,
         size_t size
     ) = 0;
-    virtual QuickerSFV_Result Finalize(
+    virtual QuickerSFV_Result QUICKER_SFV_PLUGIN_CALL Finalize(
         QuickerSFV_DigestP out_digest
     ) = 0;
-    virtual QuickerSFV_Result Reset() = 0;
+    virtual QuickerSFV_Result QUICKER_SFV_PLUGIN_CALL Reset() = 0;
 };
 
 struct IChecksumProvider {
-    virtual QuickerSFV_Result Delete() = 0;
-    virtual QuickerSFV_Result GetProviderCapabilities(
+    virtual QuickerSFV_Result QUICKER_SFV_PLUGIN_CALL Delete() = 0;
+    virtual QuickerSFV_Result QUICKER_SFV_PLUGIN_CALL GetProviderCapabilities(
         QuickerSFV_ProviderCapabilities* out_capabilities
     ) = 0;
-    virtual QuickerSFV_Result FileExtension(
+    virtual QuickerSFV_Result QUICKER_SFV_PLUGIN_CALL FileExtension(
         char* out_utf8_str,
         size_t* in_out_size
     ) = 0;
-    virtual QuickerSFV_Result FileDescription(
+    virtual QuickerSFV_Result QUICKER_SFV_PLUGIN_CALL FileDescription(
         char* out_utf8_str,
         size_t* in_out_size
     ) = 0;
-    virtual QuickerSFV_Result CreateHasher(
+    virtual QuickerSFV_Result QUICKER_SFV_PLUGIN_CALL CreateHasher(
         IQuickerSFV_Hasher** out_ihasher,
         struct QuickerSFV_HasherOptions* opts
     ) = 0;
-    virtual QuickerSFV_Result DeleteHasher(
+    virtual QuickerSFV_Result QUICKER_SFV_PLUGIN_CALL DeleteHasher(
         IQuickerSFV_Hasher* ihasher
     ) = 0;
-    virtual QuickerSFV_Result DigestFromString(
+    virtual QuickerSFV_Result QUICKER_SFV_PLUGIN_CALL DigestFromString(
         QuickerSFV_DigestP out_digest,
         char const* string_data,
         size_t string_size
     ) = 0;
-    virtual QuickerSFV_Result ReadFromFile(
+    virtual QuickerSFV_Result QUICKER_SFV_PLUGIN_CALL ReadFromFile(
         QuickerSFV_FileReadProviderP read_provider,
         QuickerSFV_CallbackResult (*read_file_binary)(
             QuickerSFV_FileReadProviderP read_provider,
@@ -261,7 +252,7 @@ struct IChecksumProvider {
             char const* digest_string
         )
     ) = 0;
-    virtual QuickerSFV_Result WriteNewFile(
+    virtual QuickerSFV_Result QUICKER_SFV_PLUGIN_CALL WriteNewFile(
         QuickerSFV_FileWriteProviderP write_provider,
         QuickerSFV_CallbackResult (*Write)(
             QuickerSFV_FileWriteProviderP write_provider,
