@@ -120,13 +120,13 @@ struct RarFileHeader {
 };
 
 RarFileHeader parseHeader(FileInput& fi) {
-    RarFileHeader ret;
+    RarFileHeader ret{};
     fi.read(std::span<std::byte>(reinterpret_cast<std::byte*>(&ret.crc32), 4));
     ret.header_size = parseVInt(fi);
     ret.header_type = parseVInt(fi);
     ret.header_flags = parseVInt(fi);
     std::vector<std::byte> header_data;
-    header_data.resize(ret.header_size.i - ret.header_type.raw_size - ret.header_flags.raw_size);
+    header_data.resize(static_cast<size_t>(ret.header_size.i - ret.header_type.raw_size - ret.header_flags.raw_size));
     fi.read(header_data);
     if (ret.header_type.i & RarFileHeader::hasExtraArea) {
         // @todo

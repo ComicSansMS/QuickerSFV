@@ -55,14 +55,14 @@ struct PluginDigest {
         }
         return *this;
     }
-    PluginDigest(PluginDigest&& rhs)
+    PluginDigest(PluginDigest&& rhs) noexcept
         :user_data(std::exchange(rhs.user_data, nullptr)),
          free_user_data(std::exchange(rhs.free_user_data, nullptr)),
          clone(std::exchange(rhs.clone, nullptr)),
          to_string(std::exchange(rhs.to_string, nullptr)),
          compare(std::exchange(rhs.compare, nullptr))
     {}
-    PluginDigest& operator=(PluginDigest&& rhs)
+    PluginDigest& operator=(PluginDigest&& rhs) noexcept
     {
         if (this != &rhs) {
             if (user_data) {

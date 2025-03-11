@@ -678,7 +678,7 @@ std::vector<MainWindow::ListViewEntry const*> MainWindow::getSelectedListViewIte
 
 void MainWindow::doCopySelectionToClipboard() {
     std::vector<ListViewEntry const*> selected_items = getSelectedListViewItems();
-    size_t const total_string_length = std::accumulate(begin(selected_items), end(selected_items), 1ull,
+    size_t const total_string_length = std::accumulate(begin(selected_items), end(selected_items), std::size_t{ 1 },
         [](size_t acc, ListViewEntry const* e) { return acc + e->name.size() + 2; });
     if (selected_items.empty()) { return; }
     HGLOBAL hmem = GlobalAlloc(GHND, total_string_length * sizeof(TCHAR));
