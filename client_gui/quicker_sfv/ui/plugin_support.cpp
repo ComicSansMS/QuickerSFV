@@ -365,6 +365,7 @@ QuickerSFV_ChecksumProvider_Callbacks* pluginCallbacks() {
 
 ChecksumProviderPtr loadPlugin(QuickerSFV_LoadPluginFunc plugin_load_function) {
     IQuickerSFV_ChecksumProvider* p = plugin_load_function(pluginCallbacks());
+    if (!p) { throwException(Error::PluginError); }
     plugin_interface::IChecksumProvider* pif = std::bit_cast<plugin_interface::IChecksumProvider*>(p);
     return ChecksumProviderPtr(new PluginChecksumProvider(pif));
 }
