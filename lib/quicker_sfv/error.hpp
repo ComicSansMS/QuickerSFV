@@ -1,6 +1,7 @@
 #ifndef INCLUDE_GUARD_QUICKER_SFV_ERROR_HPP
 #define INCLUDE_GUARD_QUICKER_SFV_ERROR_HPP
 
+#include <source_location>
 #include <stdexcept>
 #include <string_view>
 
@@ -17,9 +18,15 @@ enum class Error {
     PluginError     = 12,   ///< Error raised by an ffi-plugin.
 };
 
+#define QUICKER_SFV_ERROR_USE_SOURCE_LOCATION 0
+
 /** Raise an exception with the provided error code.
  */
-[[noreturn]] void throwException(Error e);
+[[noreturn]] void throwException(Error e
+#if QUICKER_SFV_ERROR_USE_SOURCE_LOCATION
+    , std::source_location = std::source_location::current()
+#endif
+);
 
 /** Exception.
  * Exceptions can not be constructed directly but must be raised via the
@@ -28,8 +35,15 @@ enum class Error {
 class Exception: public std::exception {
 private:
     Error m_error;
+#if QUICKER_SFV_ERROR_USE_SOURCE_LOCATION
+    std::source_location m_sourceLocation;
+#endif
 private:
-    explicit Exception(Error e) noexcept;
+    explicit Exception(Error e
+#if QUICKER_SFV_ERROR_USE_SOURCE_LOCATION
+        , std::source_location&& l
+#endif
+    ) noexcept;
 public:
     /** Retrieve the utf-8 error message associated with the exception.
      * @note what() does not give a meaningful error message for this type of
@@ -43,7 +57,11 @@ public:
      */
     [[nodiscard]] Error code() const noexcept;
 
-    friend void throwException(Error e);
+    friend void throwException(Error e
+#if QUICKER_SFV_ERROR_USE_SOURCE_LOCATION
+        , std::source_location
+#endif
+    );
 };
 
 

@@ -2,6 +2,8 @@
 
 #include <quicker_sfv/ui/enforce.hpp>
 
+#include <quicker_sfv/error.hpp>
+
 namespace quicker_sfv::gui {
 
 namespace {
@@ -112,10 +114,7 @@ HRESULT FileDialogEventHandler::OnOverwrite(IFileDialog* pfd, IShellItem* psi, F
 }
 
 CComPtr<FileDialogEventHandler> createFileDialogEventHandler(std::span<COMDLG_FILTERSPEC const> filter_types) {
-    FileDialogEventHandler* p = new (std::nothrow) FileDialogEventHandler(filter_types);
-    if (!p) {
-        return nullptr;
-    }
+    FileDialogEventHandler* p = new FileDialogEventHandler(filter_types);
     return p;
 }
 
@@ -123,25 +122,16 @@ std::optional<FileDialogResult> FileDialog(HWND parent_window, FileDialogAction 
     CComPtr<IFileDialog> file_dialog = nullptr;
     CLSID const dialog_clsid = (action == FileDialogAction::SaveAs) ? CLSID_FileSaveDialog : CLSID_FileOpenDialog;
     HRESULT hres = CoCreateInstance(dialog_clsid, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&file_dialog));
-    if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error creating file dialog"), TEXT("Error"), MB_ICONERROR);
-        return std::nullopt;
-    }
+    if (!SUCCEEDED(hres)) { throwException(Error::SystemError); }
     CComPtr<gui::FileDialogEventHandler> file_dialog_event_handler = gui::createFileDialogEventHandler(filter_types);
     DWORD cookie;
     file_dialog->Advise(file_dialog_event_handler, &cookie);
-    if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error advising dialog event handler"), TEXT("Error"), MB_ICONERROR);
-        return std::nullopt;
-    }
+    if (!SUCCEEDED(hres)) { throwException(Error::SystemError); }
     AdviseGuard advise_guard{ file_dialog, cookie };
 
     FILEOPENDIALOGOPTIONS opts;
     hres = file_dialog->GetOptions(&opts);
-    if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error retrieving file dialog options"), TEXT("Error"), MB_ICONERROR);
-        return std::nullopt;
-    }
+    if (!SUCCEEDED(hres)) { throwException(Error::SystemError); }
     opts |= FOS_FORCEFILESYSTEM;
     if (action == FileDialogAction::Open) {
         opts |= FOS_FILEMUSTEXIST;
@@ -149,29 +139,17 @@ std::optional<FileDialogResult> FileDialog(HWND parent_window, FileDialogAction 
         opts |= FOS_FORCEFILESYSTEM | FOS_PICKFOLDERS | FOS_DONTADDTORECENT;
     }
     hres = file_dialog->SetOptions(opts);
-    if (!SUCCEEDED(hres)) {
-        MessageBox(nullptr, TEXT("Error setting file dialog options"), TEXT("Error"), MB_ICONERROR);
-        return std::nullopt;
-    }
+    if (!SUCCEEDED(hres)) { throwException(Error::SystemError); }
     if (action != FileDialogAction::OpenFolder) {
         enforce(filter_types.size() < std::numeric_limits<UINT>::max());
         hres = file_dialog->SetFileTypes(static_cast<UINT>(filter_types.size()), filter_types.data());
-        if (!SUCCEEDED(hres)) {
-            MessageBox(nullptr, TEXT("Error setting file dialog file types"), TEXT("Error"), MB_ICONERROR);
-            return std::nullopt;
-        }
+        if (!SUCCEEDED(hres)) { throwException(Error::SystemError); }
         hres = file_dialog->SetFileTypeIndex(1);
-        if (!SUCCEEDED(hres)) {
-            MessageBox(nullptr, TEXT("Error setting file dialog file type index"), TEXT("Error"), MB_ICONERROR);
-            return std::nullopt;
-        }
+        if (!SUCCEEDED(hres)) { throwException(Error::SystemError); }
         auto ext = defaultExtension(filter_types[0]);
         if (!ext.empty()) {
             hres = file_dialog->SetDefaultExtension((LPCTSTR)ext.c_str());
-            if (!SUCCEEDED(hres)) {
-                MessageBox(nullptr, TEXT("Error setting file dialog default extension"), TEXT("Error"), MB_ICONERROR);
-                return std::nullopt;
-            }
+            if (!SUCCEEDED(hres)) { throwException(Error::SystemError); }
         }
     }
     if (dialog_title) {
@@ -181,22 +159,13 @@ std::optional<FileDialogResult> FileDialog(HWND parent_window, FileDialogAction 
     if (hres == S_OK) {
         UINT file_type_index;
         hres = file_dialog->GetFileTypeIndex(&file_type_index);
-        if (hres != S_OK) {
-            MessageBox(nullptr, TEXT("Error retrieving selected file type"), TEXT("Error"), MB_ICONERROR);
-            return std::nullopt;
-        }
+        if (hres != S_OK) { throwException(Error::SystemError); }
         IShellItem* shell_result;
         hres = file_dialog->GetResult(&shell_result);
-        if (hres != S_OK) {
-            MessageBox(nullptr, TEXT("Error retrieving file dialog result"), TEXT("Error"), MB_ICONERROR);
-            return std::nullopt;
-        }
+        if (hres != S_OK) { throwException(Error::SystemError); }
         LPWSTR filename;
         hres = shell_result->GetDisplayName(SIGDN_FILESYSPATH, &filename);  // works always because FOS_FORCEFILESYSTEM above
-        if (hres != S_OK) {
-            MessageBox(nullptr, TEXT("Error retrieving file dialog result display name"), TEXT("Error"), MB_ICONERROR);
-            return std::nullopt;
-        }
+        if (hres != S_OK) { throwException(Error::SystemError); }
         std::u16string ret{ reinterpret_cast<char16_t const*>(filename) };
         // prepend to remove absolute path limit
         if (!ret.starts_with(u"\\\\")) {

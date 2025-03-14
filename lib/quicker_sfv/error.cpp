@@ -2,8 +2,15 @@
 
 namespace quicker_sfv {
 
-Exception::Exception(Error e) noexcept
+Exception::Exception(Error e
+#if QUICKER_SFV_ERROR_USE_SOURCE_LOCATION
+    , std::source_location&& l
+#endif
+) noexcept
     :m_error(e)
+#if QUICKER_SFV_ERROR_USE_SOURCE_LOCATION
+    , m_sourceLocation(std::move(l))
+#endif
 {
 }
 
@@ -28,8 +35,16 @@ Exception::Exception(Error e) noexcept
     return m_error;
 }
 
-[[noreturn]] void throwException(Error e) {
-    throw Exception(e);
+[[noreturn]] void throwException(Error e
+#if QUICKER_SFV_ERROR_USE_SOURCE_LOCATION
+    , std::source_location l
+#endif
+) {
+    throw Exception(e
+#if QUICKER_SFV_ERROR_USE_SOURCE_LOCATION
+        , std::move(l)
+#endif
+    );
 }
 
 }

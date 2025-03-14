@@ -15,6 +15,10 @@ inline LPCWSTR toWcharStr(std::u16string const& u16str) {
     return reinterpret_cast<LPCWSTR>(u16str.c_str());
 }
 
+inline LPCSTR toStr(std::u8string const& u8str) {
+    return reinterpret_cast<LPCSTR>(u8str.c_str());
+}
+
 LPCTSTR formatString(LPTSTR out_buffer, size_t buffer_size, LPCTSTR format, ...);
 std::u16string formatString(size_t buffer_size, LPCTSTR format, ...);
 

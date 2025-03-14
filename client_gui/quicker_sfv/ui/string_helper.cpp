@@ -33,7 +33,6 @@ std::u16string formatString(size_t buffer_size, LPCTSTR format, ...) {
     return ret;
 }
 
-
 std::u16string extractBasePathFromFilePath(std::u16string_view checksum_file_path) {
     auto it_slash = std::find(checksum_file_path.rbegin(), checksum_file_path.rend(), u'\\').base();
     return std::u16string{ checksum_file_path.substr(0, std::distance(checksum_file_path.begin(), it_slash)) };

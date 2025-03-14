@@ -225,7 +225,7 @@ public:
     MainWindow& operator=(MainWindow const&) = delete;
     MainWindow& operator=(MainWindow&&) = delete;
 
-    BOOL createMainWindow(HINSTANCE hInstance, int nCmdShow,
+    void createMainWindow(HINSTANCE hInstance, int nCmdShow,
                           TCHAR const* class_name, TCHAR const* window_title);
 
     LRESULT WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -251,7 +251,7 @@ public:
     void loadConfigurationFromRegistry();
     void saveConfigurationToRegistry();
 private:
-    LRESULT createUiElements(HWND parent_hwnd);
+    void createUiElements(HWND parent_hwnd);
 
     LRESULT populateListView(NMHDR* nmh);
     static constexpr UINT_PTR const ListViewSubclassId = 1;
@@ -428,7 +428,8 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         PostQuitMessage(0);
         return 0;
     } else if (msg == WM_CREATE) {
-        return createUiElements(hWnd);
+        createUiElements(hWnd);
+        return 0;
     } else if (msg == WM_COMMAND) {
         if ((lParam == 0) && (HIWORD(wParam) == 0)) {
             // Menu
@@ -742,16 +743,13 @@ void MainWindow::doDeleteMarkedFiles() {
     ListView_SetItemCountEx(m_hListView, m_listEntries.size(), 0);
 }
 
-BOOL MainWindow::createMainWindow(HINSTANCE hInstance, int nCmdShow,
+void MainWindow::createMainWindow(HINSTANCE hInstance, int nCmdShow,
                                   TCHAR const* class_name, TCHAR const* window_title)
 {
     m_hInstance = hInstance;
     m_windowTitle = window_title;
     m_hMenu = LoadMenu(hInstance, MAKEINTRESOURCE(IDR_MENU1));
-    if (!m_hMenu) {
-        MessageBox(nullptr, TEXT("Error creating menu"), window_title, MB_ICONERROR);
-        return FALSE;
-    }
+    if (!m_hMenu) { throwException(Error::SystemError); }
     if (quicker_sfv::supportsAvx512()) {
         MENUITEMINFO mii{ .cbSize = sizeof(MENUITEMINFO), .fMask = MIIM_STATE, .fState = MFS_ENABLED | MFS_CHECKED };
         SetMenuItemInfo(m_hMenu, ID_OPTIONS_USEAVX512, FALSE, &mii);
@@ -773,33 +771,26 @@ BOOL MainWindow::createMainWindow(HINSTANCE hInstance, int nCmdShow,
         std::bit_cast<LPVOID>(this)
     );
     if (!m_hWnd) {
-        MessageBox(nullptr, TEXT("Error creating main window"), m_windowTitle, MB_ICONERROR);
         DestroyMenu(m_hMenu);
         m_hMenu = nullptr;
-        return FALSE;
+        throwException(Error::SystemError);
     }
 
     SetWindowLongPtr(m_hWnd, 0, std::bit_cast<LONG_PTR>(this));
 
     ShowWindow(m_hWnd, nCmdShow);
     if (!UpdateWindow(m_hWnd)) {
-        MessageBox(nullptr, TEXT("Error updating main window"), m_windowTitle, MB_ICONERROR);
         DestroyWindow(m_hWnd);
         m_hWnd = nullptr;
         DestroyMenu(m_hMenu);
         m_hMenu = nullptr;
-        return FALSE;
+        throwException(Error::SystemError);
     }
-
-    return TRUE;
 }
 
-LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
+void MainWindow::createUiElements(HWND parent_hwnd) {
     RECT parent_rect;
-    if (!GetWindowRect(parent_hwnd, &parent_rect)) {
-        MessageBox(nullptr, TEXT("Error retrieving window rect"), m_windowTitle, MB_ICONERROR);
-        return -1;
-    }
+    if (!GetWindowRect(parent_hwnd, &parent_rect)) { throwException(Error::SystemError); }
     WORD const cyChar = HIWORD(GetDialogBaseUnits());
     HMENU const field_left_id =
 #ifdef _WIN64
@@ -807,7 +798,7 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
 #else
         std::bit_cast<HMENU>(0x123u);
 #endif
-    m_hTextFieldLeft = CreateWindowW(TEXT("STATIC"),
+    m_hTextFieldLeft = CreateWindowW(WC_STATIC,
         TEXT(""),
         WS_CHILD | SS_LEFT | WS_VISIBLE | SS_SUNKEN,
         0,
@@ -819,18 +810,15 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
         m_hInstance,
         0
     );
-    if (!m_hTextFieldLeft) {
-        MessageBox(nullptr, TEXT("Error creating window ui element"), m_windowTitle, MB_ICONERROR);
-        return -1;
-    }
-    Static_SetText(m_hTextFieldLeft, TEXT("Completed files: 0/0\nOk: 0"));
+    if (!m_hTextFieldLeft) { throwException(Error::SystemError); }
+
     HMENU const field_right_id =
 #ifdef _WIN64
         std::bit_cast<HMENU>(0x124ull);
 #else
         std::bit_cast<HMENU>(0x124u);
 #endif
-    m_hTextFieldRight = CreateWindow(TEXT("STATIC"),
+    m_hTextFieldRight = CreateWindow(WC_STATIC,
         TEXT(""),
         WS_CHILD | SS_LEFT | WS_VISIBLE | SS_SUNKEN,
         (parent_rect.right - parent_rect.left) / 2,
@@ -842,11 +830,7 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
         m_hInstance,
         0
     );
-    if (!m_hTextFieldRight) {
-        MessageBox(nullptr, TEXT("Error creating window ui element"), m_windowTitle, MB_ICONERROR);
-        return -1;
-    }
-    Static_SetText(m_hTextFieldRight, TEXT("Bad: 0\nMissing: 0"));
+    if (!m_hTextFieldRight) { throwException(Error::SystemError); }
 
     HMENU const list_view_id =
 #ifdef _WIN64
@@ -856,7 +840,7 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
 #endif
     m_hListView = CreateWindowEx(WS_EX_CLIENTEDGE,
         WC_LISTVIEW,
-        TEXT("Blub"),
+        TEXT(""),
         WS_TABSTOP | WS_CHILD | WS_VISIBLE | LVS_AUTOARRANGE | LVS_REPORT | LVS_OWNERDATA,
         0,
         cyChar * 2,
@@ -867,10 +851,7 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
         m_hInstance,
         0
     );
-    if (!m_hListView) {
-        MessageBox(nullptr, TEXT("Error creating window ui element"), m_windowTitle, MB_ICONERROR);
-        return -1;
-    }
+    if (!m_hListView) { throwException(Error::SystemError); }
 
     TCHAR column_name1[] = TEXT("Name");
     TCHAR column_name2[] = TEXT("Checksum");
@@ -898,21 +879,12 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
     int const icon_size_x = GetSystemMetrics(SM_CXSMICON);
     int const icon_size_y = GetSystemMetrics(SM_CYSMICON);
     m_imageList = ImageList_Create(icon_size_x, icon_size_y, ILC_MASK | ILC_COLORDDB, number_of_icons, 0);
-    if (!m_imageList) {
-        MessageBox(nullptr, TEXT("Error creating window ui element"), m_windowTitle, MB_ICONERROR);
-        return -1;
-    }
+    if (!m_imageList) { throwException(Error::SystemError); }
 
     for (int i = 0; i < number_of_icons; ++i) {
         HANDLE hicon = LoadImage(m_hInstance, MAKEINTRESOURCE(icon_id_list[i]), IMAGE_ICON, icon_size_x, icon_size_y, LR_DEFAULTCOLOR);
-        if (!hicon) {
-            MessageBox(nullptr, TEXT("Error creating window ui element"), m_windowTitle, MB_ICONERROR);
-            return -1;
-        }
-        if (ImageList_AddIcon(m_imageList, static_cast<HICON>(hicon)) != i) {
-            MessageBox(nullptr, TEXT("Error creating window ui element"), m_windowTitle, MB_ICONERROR);
-            return -1;
-        }
+        if (!hicon) { throwException(Error::SystemError); }
+        if (ImageList_AddIcon(m_imageList, static_cast<HICON>(hicon)) != i) { throwException(Error::SystemError); }
     }
     ListView_SetImageList(m_hListView, m_imageList, LVSIL_SMALL);
 
@@ -927,12 +899,7 @@ LRESULT MainWindow::createUiElements(HWND parent_hwnd) {
         }, ListViewSubclassId, std::bit_cast<DWORD_PTR>(this));
 
     m_hPopupMenu = LoadMenu(m_hInstance, MAKEINTRESOURCE(IDR_MENU_POPUP));
-    if (!m_hPopupMenu) {
-        MessageBox(nullptr, TEXT("Error creating popup menu"), m_windowTitle, MB_ICONERROR);
-        return -1;
-    }
-
-    return 0;
+    if (!m_hPopupMenu) { throwException(Error::SystemError); }
 }
 
 void MainWindow::resize() {
@@ -1194,10 +1161,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return main_window_ptr->WndProc(hWnd, msg, wParam, lParam);
 }
 
-int APIENTRY WinMain(HINSTANCE hInstance,
-    HINSTANCE /* hPrevInstance */,
-    LPSTR     lpCmdLine,
-    int       nCmdShow)
+int WinMainImpl(HINSTANCE hInstance, LPSTR lpCmdLine, int nCmdShow)
 {
     enforce(GetACP() == 65001);  // utf-8 codepage
 
@@ -1214,8 +1178,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
     Gdiplus::GdiplusStartupInput gdiplus_startup_in;
     Gdiplus::GdiplusStartupOutput gdiplus_startup_out;
     if (Gdiplus::GdiplusStartup(&gdiplus_token, &gdiplus_startup_in, &gdiplus_startup_out) != Gdiplus::Status::Ok) {
-        MessageBox(nullptr, TEXT("Error initializing GDI+"), window_title, MB_ICONERROR | MB_OK);
-        return 0;
+        throwException(Error::SystemError);
     }
 
     if (!no_gui_window) {
@@ -1224,7 +1187,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
             .dwICC = ICC_LINK_CLASS
         };
         if (!InitCommonControlsEx(&init_cc_ex)) {
-            return 0;
+            throwException(Error::SystemError);
         }
 
         WNDCLASS wndClass{
@@ -1242,8 +1205,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
         ATOM registered_class = RegisterClass(&wndClass);
         if (!registered_class) {
-            MessageBox(nullptr, TEXT("Error registering class"), window_title, MB_ICONERROR);
-            return 0;
+            throwException(Error::SystemError);
         }
     }
 
@@ -1253,12 +1215,10 @@ int APIENTRY WinMain(HINSTANCE hInstance,
     if (no_gui_window) {
         main_window.setOutFile(command_line_opts.outFile);
     } else {
-        if (!main_window.createMainWindow(hInstance, nCmdShow, class_name, window_title)) {
-            return 0;
-        }
+        main_window.createMainWindow(hInstance, nCmdShow, class_name, window_title);
         hAccelerators = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDR_ACCELERATOR1));
         if (!hAccelerators) {
-            return 0;
+            throwException(Error::SystemError);
         }
     }
     main_window.loadConfigurationFromRegistry();
@@ -1268,7 +1228,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
     for (auto const& f : command_line_opts.filesToCheck) {
         auto* p = file_providers.getMatchingProviderFor(convertToUtf8(f), false);
         if (!p) {
-            auto const msg = formatString(1111, TEXT("Cannot determine format for filename: \"%s\""), f.c_str());
+            auto const msg = formatString(f.size() + 64, TEXT("Cannot determine format for filename: \"%s\""), f.c_str());
             MessageBox(main_window.getHwnd(), toWcharStr(msg), window_title, MB_ICONERROR | MB_OK);
             continue;
         }
@@ -1287,8 +1247,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
         if (bret == 0) {
             break;
         } else if (bret == -1) {
-            MessageBox(nullptr, TEXT("Error in GetMessage"), window_title, MB_ICONERROR);
-            return 0;
+            throwException(Error::SystemError);
         } else {
             if (!hAccelerators || !TranslateAccelerator(main_window.getHwnd(), hAccelerators, &message))
             {
@@ -1300,4 +1259,16 @@ int APIENTRY WinMain(HINSTANCE hInstance,
     scheduler.shutdown();
     Gdiplus::GdiplusShutdown(gdiplus_token);
     return static_cast<int>(message.wParam);
+}
+
+int APIENTRY WinMain(HINSTANCE hInstance,
+    HINSTANCE /* hPrevInstance */,
+    LPSTR     lpCmdLine,
+    int       nCmdShow) {
+    try {
+        return WinMainImpl(hInstance, lpCmdLine, nCmdShow);
+    } catch (Exception& e) {
+        MessageBoxA(nullptr, toStr(std::u8string(e.what8())), "QuickerSFV", MB_ICONERROR | MB_OK);
+    }
+    return 0;
 }
