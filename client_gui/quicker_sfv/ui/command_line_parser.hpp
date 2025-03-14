@@ -58,7 +58,9 @@ inline std::vector<std::u8string> commandLineLexer(std::u8string_view str) {
             break;
         case Status::InArg:
             switch (c) {
-            case '\"': [[fallthrough]];
+            case '\"':
+                status = Status::InQuotes;
+                break;
             case u8' ': [[fallthrough]];
             case u8'\t':
                 end_of_arg();

@@ -135,11 +135,28 @@ TEST_CASE("Command Line Parser")
         }
         SECTION("Unqualified arguments are intepreted as files to be checked") {
             CHECK(parseCommandLine(u8"file1.sfv") ==
-                R{ .filesToCheck = { u"file1.sfv" } });
+                R{ .filesToCheck = { u"file1.sfv" }, .outFile = u"" });
             CHECK(parseCommandLine(u8"c:\\some_foled\\file1.sfv") ==
-                R{ .filesToCheck = { u"c:\\some_foled\\file1.sfv" } });
+                R{ .filesToCheck = { u"c:\\some_foled\\file1.sfv" }, .outFile = u"" });
             CHECK(parseCommandLine(u8"c:\\some_foled\\file1.sfv \"c:\\some other folder\\file2.sfv\" c:\\file3.md5") ==
-                R{ .filesToCheck = { u"c:\\some_foled\\file1.sfv", u"c:\\some other folder\\file2.sfv", u"c:\\file3.md5" }});
+                R{ .filesToCheck = { u"c:\\some_foled\\file1.sfv", u"c:\\some other folder\\file2.sfv", u"c:\\file3.md5" },
+                   .outFile = u"" });
+        }
+        SECTION("DOALL arguments are ignored")
+        {
+            CHECK(parseCommandLine(u8"DOALL file1.sfv") ==
+                R{ .filesToCheck = { u"file1.sfv" }, .outFile = u"" });
+            CHECK(parseCommandLine(u8"DOALL c:\\some_foled\\file1.sfv DOALL DOALL") ==
+                R{ .filesToCheck = { u"c:\\some_foled\\file1.sfv" }, .outFile = u"" });
+        }
+        SECTION("OUTPUT argument sets outfile")
+        {
+            CHECK(parseCommandLine(u8"DOALL file1.sfv OUTPUT:out1.txt") ==
+                R{ .filesToCheck = { u"file1.sfv" }, .outFile = u"out1.txt" });
+            CHECK(parseCommandLine(u8"OUTPUT:out2.txt c:\\some_foled\\file1.sfv ") ==
+                R{ .filesToCheck = { u"c:\\some_foled\\file1.sfv" }, .outFile = u"out2.txt" });
+            CHECK(parseCommandLine(u8"OUTPUT:\"c:\\path with spaces\\file 1.txt\" c:\\some_foled\\file1.sfv ") ==
+                R{ .filesToCheck = { u"c:\\some_foled\\file1.sfv" }, .outFile = u"c:\\path with spaces\\file 1.txt" });
         }
     }
 }
