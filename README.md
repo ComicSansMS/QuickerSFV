@@ -51,6 +51,19 @@ On faster SSDs and for files which are hot in Windows' disk cache, QuickerSFV is
 Development Status
 ------------------
 
+QuickerSFV is currently in Beta.
+
+The following features are planned for the 1.0 release:
+   
+   - Missing features from QuickSFV.
+   - Shell Extension for creating checksum files from Windows Explorer context menu.
+   - Plugin API support for self-contained files (like `.zip` or `.rar` archives).
+
+With Version 1.0 the Plugin API will be fixed and is guaranteed to remain stable between major releases.
+
+The goal is to allow expanding the featureset of the application mainly via Plugins at this point, and only update the core application for user interface improvements and critical bug fixes.
+
+There are currently no plans to provide a graphical user interface for non-Windows platforms. A portable command line interface for Windows and non-Windows platforms may be provided at some point.
 
 
   [1]: https://github.com/user-attachments/assets/84de2664-d676-4ae1-bddf-23d464d870d4
