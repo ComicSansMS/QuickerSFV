@@ -233,17 +233,22 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
             std::u8string line;
         } read_provider{ this, &file_input, &ret, LineReader(file_input), {} };
         QuickerSFV_Result const res = pif->ReadFromFile(reinterpret_cast<QuickerSFV_FileReadProviderP>(&read_provider),
+            // read_file_binary()
             [](QuickerSFV_FileWriteProviderP read_provider, char* out_read_buffer, size_t read_buffer_size, size_t* out_bytes_read) -> QuickerSFV_CallbackResult {
                 ReadInput* ri = reinterpret_cast<ReadInput*>(read_provider);
-                size_t const bytes_read = ri->file_input->read(std::span<std::byte>(reinterpret_cast<std::byte*>(out_read_buffer), read_buffer_size));
-                if (bytes_read == 0) { return QuickerSFV_CallbackResult_Failed; }
-                if (bytes_read == FileInput::RESULT_END_OF_FILE) {
-                    *out_bytes_read = 0;
-                    return QuickerSFV_CallbackResult_Ok;
+                try {
+                    size_t const bytes_read = ri->file_input->read(std::span<std::byte>(reinterpret_cast<std::byte*>(out_read_buffer), read_buffer_size));
+                    if (bytes_read == FileInput::RESULT_END_OF_FILE) {
+                        *out_bytes_read = 0;
+                        return QuickerSFV_CallbackResult_Ok;
+                    }
+                    *out_bytes_read = bytes_read;
+                } catch (...) {
+                    return QuickerSFV_CallbackResult_Failed;
                 }
-                *out_bytes_read = bytes_read;
                 return QuickerSFV_CallbackResult_MoreData;
             },
+            // seek_file_binary()
             [](QuickerSFV_FileReadProviderP read_provider, int64_t offset, QuickerSFV_SeekStart seek_start) -> QuickerSFV_CallbackResult {
                 ReadInput* ri = reinterpret_cast<ReadInput*>(read_provider);
                 quicker_sfv::FileInput::SeekStart s;
@@ -256,17 +261,25 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
                 } else {
                     return QuickerSFV_CallbackResult_InvalidArg;
                 }
-                int64_t ret = ri->file_input->seek(offset, s);
-                if (ret < 0) { return QuickerSFV_CallbackResult_Failed; }
+                try {
+                    ri->file_input->seek(offset, s);
+                } catch (...) {
+                    return QuickerSFV_CallbackResult_Failed;
+                }
                 return QuickerSFV_CallbackResult_Ok;
             },
+            // tell_file_binary()
             [](QuickerSFV_FileReadProviderP read_provider, int64_t* out_position) -> QuickerSFV_CallbackResult {
                 ReadInput* ri = reinterpret_cast<ReadInput*>(read_provider);
-                int64_t const res = ri->file_input->tell();
-                if (res < 0) { return QuickerSFV_CallbackResult_Failed; }
-                *out_position = res;
+                try {
+                    int64_t const res = ri->file_input->tell();
+                    *out_position = res;
+                } catch (...) {
+                    return QuickerSFV_CallbackResult_Failed;
+                }
                 return QuickerSFV_CallbackResult_Ok;
             },
+            // read_line_text()
             [](QuickerSFV_FileWriteProviderP read_provider, char const** out_line, size_t* out_line_size) -> QuickerSFV_CallbackResult {
                 ReadInput* ri = reinterpret_cast<ReadInput*>(read_provider);
                 if (ri->line_reader.done()) { return QuickerSFV_CallbackResult_Ok; }
@@ -281,11 +294,16 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
                 }
                 return QuickerSFV_CallbackResult_MoreData;
             },
+            // new_entry_callback()
             [](QuickerSFV_FileWriteProviderP read_provider, char const* filename, char const* digest_string) -> QuickerSFV_CallbackResult {
                 ReadInput* ri = reinterpret_cast<ReadInput*>(read_provider);
-                ri->checksum_file->addEntry(
-                    reinterpret_cast<char8_t const*>(filename),
-                    ri->provider->digestFromString(reinterpret_cast<char8_t const*>(digest_string)));
+                try {
+                    ri->checksum_file->addEntry(
+                        reinterpret_cast<char8_t const*>(filename),
+                        ri->provider->digestFromString(reinterpret_cast<char8_t const*>(digest_string)));
+                } catch (...) {
+                    return QuickerSFV_CallbackResult_Failed;
+                }
                 return QuickerSFV_CallbackResult_Ok;
             });
         if (res != QuickerSFV_Result_OK) {
@@ -302,6 +320,7 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
             std::u8string digest_string;
         } write_provider{ &file_output, &f, f.getEntries().begin() };
         QuickerSFV_Result const res = pif->WriteNewFile(reinterpret_cast<QuickerSFV_FileWriteProviderP>(&write_provider),
+            // write()
             [](QuickerSFV_FileWriteProviderP write_provider, char const* buffer, size_t buffer_size, size_t* out_bytes_written) -> QuickerSFV_CallbackResult {
                 WriteProvider* wp = reinterpret_cast<WriteProvider*>(write_provider);
                 try {
@@ -310,18 +329,24 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
                     return QuickerSFV_CallbackResult_Failed;
                 }
                 return (*out_bytes_written != buffer_size) ? QuickerSFV_CallbackResult_Failed : QuickerSFV_CallbackResult_Ok;
-            }, [](QuickerSFV_FileWriteProviderP write_provider, char const** out_filename, char const** out_digest) -> QuickerSFV_CallbackResult {
+            },
+            // next_entry()
+            [](QuickerSFV_FileWriteProviderP write_provider, char const** out_filename, char const** out_digest) -> QuickerSFV_CallbackResult {
                 WriteProvider* wp = reinterpret_cast<WriteProvider*>(write_provider);
-                if (wp->it == wp->checksum_file->getEntries().end()) {
-                    *out_filename = nullptr;
-                    *out_digest = nullptr;
-                    return QuickerSFV_CallbackResult_Ok;
+                try {
+                    if (wp->it == wp->checksum_file->getEntries().end()) {
+                        *out_filename = nullptr;
+                        *out_digest = nullptr;
+                        return QuickerSFV_CallbackResult_Ok;
+                    }
+                    *out_filename = reinterpret_cast<char const*>(wp->it->path.c_str());
+                    wp->digest_string = wp->it->digest.toString();
+                    *out_digest = reinterpret_cast<char const*>(wp->digest_string.c_str());
+                    ++wp->it;
+                    return QuickerSFV_CallbackResult_MoreData;
+                } catch (...) {
+                    return QuickerSFV_CallbackResult_Failed;
                 }
-                *out_filename = reinterpret_cast<char const*>(wp->it->path.c_str());
-                wp->digest_string = wp->it->digest.toString();
-                *out_digest = reinterpret_cast<char const*>(wp->digest_string.c_str());
-                ++wp->it;
-                return QuickerSFV_CallbackResult_MoreData;
             });
         if (res != QuickerSFV_Result_OK) {
             throwException(Error::PluginError);
