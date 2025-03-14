@@ -217,40 +217,52 @@ if(BUILD_TESTS)
     endif()
 endif()
 
+
+add_library(quicker_sfv_client_support)
+target_sources(quicker_sfv_client_support
+    PRIVATE
+    ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/enforce.cpp
+    ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/plugin_support.cpp
+    PUBLIC
+    FILE_SET HEADERS
+    BASE_DIRS ${PROJECT_SOURCE_DIR}/client_gui
+    FILES
+    ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/command_line_parser.hpp
+    ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/enforce.hpp
+    ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/event_handler.hpp
+    ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/plugin_support.hpp
+    ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/resource_guard.hpp
+)
 if(MSVC)
-    add_library(quicker_sfv_client_support)
     target_sources(quicker_sfv_client_support
         PRIVATE
-        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/enforce.cpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/file_dialog.cpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/operation_scheduler.cpp
-        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/plugin_support.cpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/string_helper.cpp
         PUBLIC
         FILE_SET HEADERS
         BASE_DIRS ${PROJECT_SOURCE_DIR}/client_gui
         FILES
-        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/command_line_parser.hpp
-        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/enforce.hpp
-        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/event_handler.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/file_dialog.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/operation_scheduler.hpp
-        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/plugin_support.hpp
-        ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/resource_guard.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/string_helper.hpp
         ${PROJECT_SOURCE_DIR}/client_gui/quicker_sfv/ui/user_messages.hpp
     )
-    target_link_libraries(quicker_sfv_client_support PUBLIC quicker_sfv)
-    target_compile_features(quicker_sfv_client_support PRIVATE cxx_std_23)
-    target_compile_options(quicker_sfv_client_support PRIVATE
-        $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
-        $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -pedantic>
-    )
-    target_compile_definitions(quicker_sfv_client_support PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-    if(QUICKER_SFV_BUILD_SELF_CONTAINED)
-        target_compile_definitions(quicker_sfv_client_support PUBLIC QUICKER_SFV_BUILD_SELF_CONTAINED)
-    endif(QUICKER_SFV_BUILD_SELF_CONTAINED)
+endif()
+target_link_libraries(quicker_sfv_client_support PUBLIC quicker_sfv)
+target_compile_features(quicker_sfv_client_support PRIVATE cxx_std_23)
+target_compile_options(quicker_sfv_client_support PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -pedantic>
+)
+target_compile_definitions(quicker_sfv_client_support
+    PRIVATE $<$<CXX_COMPILER_ID:MSVC>:UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX>)
+if(QUICKER_SFV_BUILD_SELF_CONTAINED)
+    target_compile_definitions(quicker_sfv_client_support PUBLIC QUICKER_SFV_BUILD_SELF_CONTAINED)
+endif(QUICKER_SFV_BUILD_SELF_CONTAINED)
 
+
+if(MSVC)
     add_executable(QuickerSFV WIN32)
     configure_file(
         ${PROJECT_SOURCE_DIR}/resource/quicker_sfv.manifest.in

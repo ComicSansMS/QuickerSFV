@@ -656,5 +656,4 @@ void OperationScheduler::dispatchEvent(EventHandler* recipient, Event::EError co
     recipient->onError(e.error, e.msg);
 }
 
-
 }
