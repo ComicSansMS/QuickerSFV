@@ -45,7 +45,7 @@ On HDDs QuickSFV and QuickerSFV both perform about the same, in the order of the
 
 On faster SSDs and for files which are hot in Windows' disk cache, QuickerSFV is able to significantly outperform QuickSFV. A benchmark on a Samsung SSD 990 Pro 2TB, running on a Ryzen 9 7950X3D CPU shows QuickerSFV being roughly 9x faster for CRC and roughly 3x faster for MD5 calculations. This comparison is between QuickSFV v2.36 and QuickerSFV v0.1 on Windows 11.
 
-<img src="https://github.com/user-attachments/assets/cdae905d-5595-4a5d-af29-f04d05e24f16" alt="Benchmark Bar Plot" width="640" height="480" />
+<img src="https://github.com/ComicSansMS/QuickerSFV/blob/main/.github/images/plot_bar.png" alt="Benchmark Bar Plot" width="640" height="480" />
 
 
 Development Status
@@ -66,4 +66,4 @@ The goal is to allow expanding the featureset of the application mainly via Plug
 There are currently no plans to provide a graphical user interface for non-Windows platforms. A portable command line interface for Windows and non-Windows platforms may be provided at some point.
 
 
-  [1]: https://github.com/user-attachments/assets/84de2664-d676-4ae1-bddf-23d464d870d4
+  [1]: https://github.com/ComicSansMS/QuickerSFV/blob/main/.github/images/quicker_sfv_logo.png
