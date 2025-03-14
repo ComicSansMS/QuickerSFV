@@ -206,7 +206,8 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
         QuickerSFV_HasherOptions opts{
             .opt_size = sizeof(QuickerSFV_HasherOptions),
             .has_sse42 = hasher_options.has_sse42,
-            .has_avx512 = hasher_options.has_avx512
+            .has_avx512 = hasher_options.has_avx512,
+            .reserved = {}
         };
         if (pif->CreateHasher(&hasher, &opts) != QuickerSFV_Result_OK) {
             throwException(Error::PluginError);
@@ -318,7 +319,7 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
             ChecksumFile const* checksum_file;
             std::span<ChecksumFile::Entry const>::iterator it;
             std::u8string digest_string;
-        } write_provider{ &file_output, &f, f.getEntries().begin() };
+        } write_provider{ &file_output, &f, f.getEntries().begin(), {} };
         QuickerSFV_Result const res = pif->WriteNewFile(reinterpret_cast<QuickerSFV_FileWriteProviderP>(&write_provider),
             // write()
             [](QuickerSFV_FileWriteProviderP write_provider, char const* buffer, size_t buffer_size, size_t* out_bytes_written) -> QuickerSFV_CallbackResult {

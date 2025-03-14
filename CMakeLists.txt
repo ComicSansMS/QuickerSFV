@@ -261,6 +261,20 @@ if(QUICKER_SFV_BUILD_SELF_CONTAINED)
     target_compile_definitions(quicker_sfv_client_support PUBLIC QUICKER_SFV_BUILD_SELF_CONTAINED)
 endif(QUICKER_SFV_BUILD_SELF_CONTAINED)
 
+if(BUILD_TESTS)
+    add_executable(quicker_sfv_ui_tests)
+    target_sources(quicker_sfv_ui_tests
+        PRIVATE
+        ${PROJECT_SOURCE_DIR}/test/ui/win32_command_line_parser.t.cpp
+    )
+    target_compile_options(quicker_sfv_ui_tests PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
+        $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -pedantic>
+    )
+    target_link_libraries(quicker_sfv_ui_tests PRIVATE quicker_sfv_client_support Catch2)
+    add_test(NAME "QuickerSFV UI Unit Tests" COMMAND quicker_sfv_ui_tests)
+endif()
+
 
 if(MSVC)
     add_executable(QuickerSFV WIN32)
@@ -298,20 +312,6 @@ if(MSVC)
     target_link_libraries(QuickerSFV PRIVATE UxTheme.lib Comctl32.lib gdiplus.lib quicker_sfv quicker_sfv_client_support)
     target_link_options(QuickerSFV PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/MANIFEST:NO>)
     set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT QuickerSFV)
-
-    if(BUILD_TESTS)
-        add_executable(quicker_sfv_ui_tests)
-        target_sources(quicker_sfv_ui_tests
-            PRIVATE
-            ${PROJECT_SOURCE_DIR}/test/ui/win32_command_line_parser.t.cpp
-        )
-        target_compile_options(quicker_sfv_ui_tests PRIVATE
-            $<$<CXX_COMPILER_ID:MSVC>:/W4 /permissive->
-            $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -pedantic>
-        )
-        target_link_libraries(quicker_sfv_ui_tests PRIVATE quicker_sfv_client_support Catch2)
-        add_test(NAME "QuickerSFV UI Unit Tests" COMMAND quicker_sfv_ui_tests)
-    endif()
 endif(MSVC)
 
 option(BUILD_PLUGINS "" ON)
