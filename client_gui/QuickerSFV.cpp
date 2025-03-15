@@ -129,7 +129,7 @@ public:
             return;
         }
         do {
-            HMODULE hmod = LoadLibrary(find_data.cFileName);
+            HMODULE hmod = LoadLibraryEx(find_data.cFileName, nullptr, LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
             if (hmod) {
                 if (auto loader = (QuickerSFV_LoadPluginFunc)GetProcAddress(hmod, "QuickerSFV_LoadPlugin"); loader) {
                     addProvider(quicker_sfv::gui::loadPlugin(loader));
