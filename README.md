@@ -51,7 +51,7 @@ Benchmarks
 ----------
 On HDDs QuickSFV and QuickerSFV both perform about the same, in the order of the speed of the drive. The checksum calculation is purely I/O-bound.
 
-On faster SSDs and for files which are hot in Windows' disk cache, QuickerSFV is able to significantly outperform QuickSFV. A benchmark on a Samsung SSD 990 Pro 2TB, running on a Ryzen 9 7950X3D CPU shows QuickerSFV being roughly 9x faster for CRC and roughly 3x faster for MD5 calculations. This comparison is between QuickSFV v2.36 and QuickerSFV v0.1 on Windows 11.
+On faster SSDs and for files which are hot in Windows' disk cache, QuickerSFV is able to significantly outperform QuickSFV. A benchmark for checking a single 10GiB file, measured with a Samsung SSD 990 Pro 2TB on a Ryzen 9 7950X3D CPU shows QuickerSFV being roughly **9x faster for CRC** and roughly **3x faster for MD5** calculations. This comparison is between QuickSFV v2.36 and QuickerSFV v0.6.0 on Windows 11.
 
 <img src="https://github.com/ComicSansMS/QuickerSFV/blob/main/.github/images/plot_bar.png" alt="Benchmark Bar Plot" width="640" height="480" />
 
