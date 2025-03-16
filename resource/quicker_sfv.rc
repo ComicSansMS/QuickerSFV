@@ -66,8 +66,8 @@ IDI_ICON_INFO           ICON                    "info.ico"
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,0,1,0
- PRODUCTVERSION 0,0,1,0
+ FILEVERSION 0,6,0,0
+ PRODUCTVERSION 0,6,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -83,10 +83,10 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "FileDescription", "QuickerSFV - A quicker checksum verifier"
-            VALUE "FileVersion", "0.0.1.0"
+            VALUE "FileVersion", "0.6.0.0"
             VALUE "LegalCopyright", "Copyright (C) 2025"
             VALUE "ProductName", "QuickerSFV"
-            VALUE "ProductVersion", "0.0.1.0"
+            VALUE "ProductVersion", "0.6.0.0"
         END
     END
     BLOCK "VarFileInfo"
