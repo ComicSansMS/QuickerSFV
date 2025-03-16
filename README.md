@@ -13,6 +13,14 @@ Major Features
    - 🧳 Portable self-contained executables available
    - 📖 Fully open-sourced implementation licensed under GPL v3
 
+Installation
+------------
+Download a binary from the [Releases](https://github.com/ComicSansMS/QuickerSFV/releases) page.
+
+All binaries labeled `self-contained` should run on any Windows system without any additional dependencies.
+
+If you get an error on startup saying that VCRUNTIME140_1.dll was not found, you need to install the Microsoft Visual C++ Redistributable on your system. It can be [downloaded here](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170#latest-microsoft-visual-c-redistributable-version).
+
 Why update from QuickSFV?
 -------------------------
 QuickSFV is a great and well-established software, but after 15 years without any updates, it is starting to show its age.
