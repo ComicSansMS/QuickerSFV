@@ -130,12 +130,12 @@ private:
     HashResult hashFile(EventHandler* event_handler, Hasher& hasher,
                         HANDLE fin, std::span<HashReadState, 2> read_states);
 
-    void signalCheckStarted(EventHandler* recipient, uint32_t n_files);
+    void signalOperationStarted(EventHandler* recipient, uint32_t n_files);
     void signalFileStarted(EventHandler* recipient, std::u8string file, std::u8string absolute_file_path);
     void signalProgress(EventHandler* recipient, uint32_t percentage, uint32_t bandwidth_mib_s);
     void signalFileCompleted(EventHandler* recipient, std::u8string file, Digest checksum,
         std::u8string absolute_file_path, EventHandler::CompletionStatus status);
-    void signalCheckCompleted(EventHandler* recipient, EventHandler::Result r);
+    void signalOperationCompleted(EventHandler* recipient, EventHandler::Result r);
     void signalCanceled(EventHandler* recipient);
     void signalError(EventHandler* recipient, Error error, std::u8string_view msg);
 

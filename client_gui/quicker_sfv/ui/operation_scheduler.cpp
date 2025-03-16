@@ -434,7 +434,7 @@ void OperationScheduler::doVerify(OperationState& op) {
 
     EventHandler::Result result{};
     result.total = static_cast<uint32_t>(op.checksum_file.getEntries().size());
-    signalCheckStarted(op.event_handler, result.total);
+    signalOperationStarted(op.event_handler, result.total);
 
     for (auto const& f : op.checksum_file.getEntries()) {
         std::u16string const absolute_file_path = resolvePath(op.checksum_path, f.path);
@@ -473,10 +473,11 @@ void OperationScheduler::doVerify(OperationState& op) {
             return;
         } else if (res == HashResult::Canceled) {
             signalCanceled(op.event_handler);
+            result.was_canceled = true;
             break;
         }
     }
-    signalCheckCompleted(op.event_handler, result);
+    signalOperationCompleted(op.event_handler, result);
 }
 
 void OperationScheduler::doCreate(OperationState& op) {
@@ -504,7 +505,7 @@ void OperationScheduler::doCreate(OperationState& op) {
         },
     };
 
-    signalCheckStarted(op.event_handler, 0);
+    signalOperationStarted(op.event_handler, 0);
     EventHandler::Result result = {};
     for (auto const& [absolute_path, relative_path, size] : iterateFiles(op.folder_path)) {
         std::u8string const utf8_relative_path = convertToUtf8(relative_path);
@@ -531,16 +532,17 @@ void OperationScheduler::doCreate(OperationState& op) {
             ++result.bad;
         } else if (res == HashResult::Canceled) {
             signalCanceled(op.event_handler);
+            result.was_canceled = true;
             return;
         }
         ++result.total;
     }
     FileOutputWin32 writer(op.checksum_path);
     op.checksum_provider->writeNewFile(writer, op.checksum_file);
-    signalCheckCompleted(op.event_handler, result);
+    signalOperationCompleted(op.event_handler, result);
 }
 
-void OperationScheduler::signalCheckStarted(EventHandler* recipient, uint32_t n_files) {
+void OperationScheduler::signalOperationStarted(EventHandler* recipient, uint32_t n_files) {
     std::scoped_lock lk(m_mtxEvents);
     m_eventsQueue.emplace_back(Event{
         .recipient = recipient,
@@ -589,7 +591,7 @@ void OperationScheduler::signalFileCompleted(EventHandler* recipient, std::u8str
     PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
 }
 
-void OperationScheduler::signalCheckCompleted(EventHandler* recipient, EventHandler::Result r) {
+void OperationScheduler::signalOperationCompleted(EventHandler* recipient, EventHandler::Result r) {
     std::scoped_lock lk(m_mtxEvents);
     m_eventsQueue.emplace_back(Event{
         .recipient = recipient,
