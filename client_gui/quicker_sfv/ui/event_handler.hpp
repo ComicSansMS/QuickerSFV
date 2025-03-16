@@ -101,6 +101,7 @@ struct EventHandler {
     /** A critical error occurred that prevents the operation from continuing.
      * This event signals that one of the following occurred:
      *  - A non-I/O system API call fails.
+     *  - The Hasher used for computing the checksum Digest raised an error.
      *  - An I/O error while reading the checksum file for a verify operation.
      *  - An I/O error while listing the contents of a directory for a
      *    create operation.
