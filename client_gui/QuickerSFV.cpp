@@ -233,12 +233,11 @@ public:
     HWND getHwnd() const;
     HasherOptions getOptions() const;
 
-    void onCheckStarted(uint32_t n_files) override;
+    void onOperationStarted(uint32_t n_files) override;
     void onFileStarted(std::u8string_view file, std::u8string_view absolute_file_path) override;
     void onProgress(uint32_t percentage, uint32_t bandwidth_mib_s) override;
     void onFileCompleted(std::u8string_view file, Digest const& checksum, std::u8string_view absolute_file_path, CompletionStatus status) override;
-    void onCheckCompleted(Result r) override;
-    void onCancelRequested() override;
+    void onOperationCompleted(Result r) override;
     void onCanceled() override;
     void onError(quicker_sfv::Error error, std::u8string_view msg) override;
 
@@ -931,7 +930,7 @@ HasherOptions MainWindow::getOptions() const {
     return m_options;
 }
 
-void MainWindow::onCheckStarted(uint32_t n_files) {
+void MainWindow::onOperationStarted(uint32_t n_files) {
     ListView_DeleteAllItems(m_hListView);
     m_listEntries.clear();
     quicker_sfv::Version const v = quicker_sfv::getVersion();
@@ -973,7 +972,7 @@ void MainWindow::onFileCompleted(std::u8string_view file, Digest const& checksum
     UpdateStats();
 }
 
-void MainWindow::onCheckCompleted(Result r) {
+void MainWindow::onOperationCompleted(Result r) {
     m_stats.ok = r.ok;
     m_stats.bad = r.bad;
     m_stats.missing = r.missing;
@@ -1006,9 +1005,6 @@ void MainWindow::onCheckCompleted(Result r) {
         writeResultsToFile();
         PostQuitMessage(0);
     }
-}
-
-void MainWindow::onCancelRequested() {
 }
 
 void MainWindow::onCanceled() {

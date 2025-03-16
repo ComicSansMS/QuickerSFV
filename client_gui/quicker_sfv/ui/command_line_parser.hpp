@@ -10,6 +10,13 @@
 
 namespace quicker_sfv::gui {
 
+/** A command line lexer.
+ * This function splits a single command line string into individual commands.
+ * It mainly takes care of handling quotes and escapes in the command line string to
+ * get consistent behaviour with how Windows usually handles command line arguments.
+ * @param[in] str The complete command line as passed to lpCmdLine in WinMain.
+ * @return A list of split command line arguments.
+ */
 inline std::vector<std::u8string> commandLineLexer(std::u8string_view str) {
     std::vector<std::u8string> args;
     enum class Status {
@@ -98,15 +105,20 @@ inline std::vector<std::u8string> commandLineLexer(std::u8string_view str) {
     return args;
 }
 
+/** Command line arguments.
+ */
 struct CommandLineOptions {
-    std::vector<std::u16string> filesToCheck;
-    std::u16string outFile;
+    std::vector<std::u16string> filesToCheck;       ///< List of files to verify.
+    std::u16string outFile;                         ///< File to redirect output to.
 
     friend bool operator==(CommandLineOptions const&, CommandLineOptions const&) = default;
     friend bool operator!=(CommandLineOptions const&, CommandLineOptions const&) = default;
 };
 
-
+/** Parses a single command line string to a CommandLineOptions object.
+ * @param[in] str The complete command line as passed to lpCmdLine in WinMain.
+ * @return The CommandLineOptions for the command line input.
+ */
 inline CommandLineOptions parseCommandLine(std::u8string_view str) {
     std::vector<std::u8string> const args = commandLineLexer(str);
     CommandLineOptions opts;

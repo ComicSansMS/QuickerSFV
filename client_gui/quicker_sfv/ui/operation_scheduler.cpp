@@ -200,7 +200,6 @@ void OperationScheduler::run() {
 void OperationScheduler::post(Operation::Verify op) {
     std::scoped_lock lk(m_mtxOps);
     m_opsQueue.push_back(OperationState{
-        .cancel_requested = false,
         .event_handler = op.event_handler,
         .checksum_provider = op.provider,
         .kind = OperationState::Op::Verify,
@@ -218,7 +217,6 @@ void OperationScheduler::post(Operation::Cancel) {
 void OperationScheduler::post(Operation::CreateFromFolder op) {
     std::scoped_lock lk(m_mtxOps);
     m_opsQueue.push_back(OperationState{
-        .cancel_requested = false,
         .event_handler = op.event_handler,
         .checksum_provider = op.provider,
         .kind = OperationState::Op::Create,
@@ -445,26 +443,33 @@ void OperationScheduler::doVerify(OperationState& op) {
         HANDLE fin = CreateFile(toWcharStr(absolute_file_path), GENERIC_READ, FILE_SHARE_READ, nullptr,
                                 OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED, nullptr);
         if (fin == INVALID_HANDLE_VALUE) {
-            signalFileCompleted(op.event_handler, f.path, Digest{}, utf8_absolute_file_path, EventHandler::CompletionStatus::Missing);
-            ++result.missing;
+            if (GetLastError() == ERROR_FILE_NOT_FOUND) {
+                signalFileCompleted(op.event_handler, f.path, Digest{}, utf8_absolute_file_path,
+                                    EventHandler::CompletionStatus::Missing);
+                ++result.missing;
+            } else {
+                signalFileCompleted(op.event_handler, f.path, Digest{}, utf8_absolute_file_path,
+                                    EventHandler::CompletionStatus::Bad);
+                ++result.bad;
+            }
             continue;
         }
         HandleGuard guard_fin(fin);
         HashResult const res = hashFile(op.event_handler, *op.hasher, fin, read_states);
         if (res == HashResult::DigestReady) {
-            auto const digest = op.hasher->finalize();
+            auto digest = op.hasher->finalize();
             if (digest == f.digest) {
-                signalFileCompleted(op.event_handler, f.path, std::move(digest), utf8_absolute_file_path, EventHandler::CompletionStatus::Ok);
+                signalFileCompleted(op.event_handler, f.path, std::move(digest), utf8_absolute_file_path,
+                                    EventHandler::CompletionStatus::Ok);
                 ++result.ok;
             } else {
-                signalFileCompleted(op.event_handler, f.path, std::move(digest), utf8_absolute_file_path, EventHandler::CompletionStatus::Bad);
+                signalFileCompleted(op.event_handler, f.path, std::move(digest), utf8_absolute_file_path,
+                                    EventHandler::CompletionStatus::Bad);
                 ++result.bad;
             }
-        } else if (res == HashResult::Missing) {
-            signalFileCompleted(op.event_handler, f.path, Digest{}, utf8_absolute_file_path, EventHandler::CompletionStatus::Missing);
-            ++result.missing;
         } else if (res == HashResult::Error) {
-            signalFileCompleted(op.event_handler, f.path, Digest{}, utf8_absolute_file_path, EventHandler::CompletionStatus::Bad);
+            signalFileCompleted(op.event_handler, f.path, Digest{}, utf8_absolute_file_path,
+                                EventHandler::CompletionStatus::Bad);
             return;
         } else if (res == HashResult::Canceled) {
             signalCanceled(op.event_handler);
@@ -508,18 +513,21 @@ void OperationScheduler::doCreate(OperationState& op) {
         HANDLE fin = CreateFile(absolute_path, GENERIC_READ, FILE_SHARE_READ, nullptr,
                                 OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED, nullptr);
         if (fin == INVALID_HANDLE_VALUE) {
-            signalFileCompleted(op.event_handler, utf8_relative_path, Digest{}, utf8_absolute_path, EventHandler::CompletionStatus::Bad);
+            signalFileCompleted(op.event_handler, utf8_relative_path, Digest{}, utf8_absolute_path,
+                                EventHandler::CompletionStatus::Bad);
             continue;
         }
         HandleGuard guard_fin(fin);
         HashResult const res = hashFile(op.event_handler, *op.hasher, fin, read_states);
         if (res == HashResult::DigestReady) {
-            Digest const d = op.hasher->finalize();
-            signalFileCompleted(op.event_handler, utf8_relative_path, d, utf8_absolute_path, EventHandler::CompletionStatus::Ok);
+            Digest d = op.hasher->finalize();
+            signalFileCompleted(op.event_handler, utf8_relative_path, d, utf8_absolute_path,
+                                EventHandler::CompletionStatus::Ok);
             op.checksum_file.addEntry(utf8_relative_path, std::move(d));
             ++result.ok;
-        } else if ((res == HashResult::Missing) || (res == HashResult::Error)) {
-            signalFileCompleted(op.event_handler, utf8_relative_path, {}, utf8_absolute_path, EventHandler::CompletionStatus::Bad);
+        } else if (res == HashResult::Error) {
+            signalFileCompleted(op.event_handler, utf8_relative_path, {}, utf8_absolute_path,
+                                EventHandler::CompletionStatus::Bad);
             ++result.bad;
         } else if (res == HashResult::Canceled) {
             signalCanceled(op.event_handler);
@@ -536,7 +544,7 @@ void OperationScheduler::signalCheckStarted(EventHandler* recipient, uint32_t n_
     std::scoped_lock lk(m_mtxEvents);
     m_eventsQueue.emplace_back(Event{
         .recipient = recipient,
-        .event = Event::ECheckStarted {
+        .event = Event::EOperationStarted {
             .n_files = n_files
         }
     });
@@ -585,18 +593,8 @@ void OperationScheduler::signalCheckCompleted(EventHandler* recipient, EventHand
     std::scoped_lock lk(m_mtxEvents);
     m_eventsQueue.emplace_back(Event{
         .recipient = recipient,
-        .event = Event::ECheckCompleted {
+        .event = Event::EOperationCompleted {
             .r = r
-        }
-    });
-    PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
-}
-
-void OperationScheduler::signalCancelRequested(EventHandler* recipient) {
-    std::scoped_lock lk(m_mtxEvents);
-    m_eventsQueue.emplace_back(Event{
-        .recipient = recipient,
-        .event = Event::ECancelRequested {
         }
     });
     PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
@@ -624,8 +622,8 @@ void OperationScheduler::signalError(EventHandler* recipient, quicker_sfv::Error
     PostThreadMessage(m_startingThreadId, WM_SCHEDULER_WAKEUP, 0, 0);
 }
 
-void OperationScheduler::dispatchEvent(EventHandler* recipient, Event::ECheckStarted const& e) {
-    recipient->onCheckStarted(e.n_files);
+void OperationScheduler::dispatchEvent(EventHandler* recipient, Event::EOperationStarted const& e) {
+    recipient->onOperationStarted(e.n_files);
 }
 
 void OperationScheduler::dispatchEvent(EventHandler* recipient, Event::EFileStarted const& e) {
@@ -640,12 +638,8 @@ void OperationScheduler::dispatchEvent(EventHandler* recipient, Event::EFileComp
     recipient->onFileCompleted(e.file, e.checksum, e.absolute_file_path, e.status);
 }
 
-void OperationScheduler::dispatchEvent(EventHandler* recipient, Event::ECheckCompleted const& e) {
-    recipient->onCheckCompleted(e.r);
-}
-
-void OperationScheduler::dispatchEvent(EventHandler* recipient, Event::ECancelRequested const&) {
-    recipient->onCancelRequested();
+void OperationScheduler::dispatchEvent(EventHandler* recipient, Event::EOperationCompleted const& e) {
+    recipient->onOperationCompleted(e.r);
 }
 
 void OperationScheduler::dispatchEvent(EventHandler* recipient, Event::ECanceled const&) {

@@ -48,7 +48,6 @@ struct Cancel {
 struct OperationScheduler {
 private:
     struct OperationState {
-        bool cancel_requested;
         EventHandler* event_handler;
         ChecksumProvider* checksum_provider;
         enum Op {
@@ -67,7 +66,7 @@ private:
     HANDLE m_cancelEvent;
 
     struct Event {
-        struct ECheckStarted {
+        struct EOperationStarted {
             uint32_t n_files;
         };
         struct EFileStarted {
@@ -84,10 +83,8 @@ private:
             std::u8string absolute_file_path;
             EventHandler::CompletionStatus status;
         };
-        struct ECheckCompleted {
+        struct EOperationCompleted {
             EventHandler::Result r;
-        };
-        struct ECancelRequested {
         };
         struct ECanceled {
         };
@@ -96,7 +93,8 @@ private:
             std::u8string msg;
         };
         EventHandler* recipient;
-        std::variant<ECheckStarted, EFileStarted, EProgress, EFileCompleted, ECheckCompleted, ECancelRequested, ECanceled, EError> event;
+        std::variant<EOperationStarted, EFileStarted, EProgress, EFileCompleted, EOperationCompleted,
+                     ECanceled, EError> event;
     };
     std::vector<Event> m_eventsQueue;
     std::mutex m_mtxEvents;
@@ -119,7 +117,6 @@ private:
     void doCreate(OperationState& op);
     enum class HashResult {
         DigestReady,
-        Missing,
         Canceled,
         Error,
     };
@@ -139,16 +136,14 @@ private:
     void signalFileCompleted(EventHandler* recipient, std::u8string file, Digest checksum,
         std::u8string absolute_file_path, EventHandler::CompletionStatus status);
     void signalCheckCompleted(EventHandler* recipient, EventHandler::Result r);
-    void signalCancelRequested(EventHandler* recipient);
     void signalCanceled(EventHandler* recipient);
     void signalError(EventHandler* recipient, Error error, std::u8string_view msg);
 
-    static void dispatchEvent(EventHandler* recipient, Event::ECheckStarted const& e);
+    static void dispatchEvent(EventHandler* recipient, Event::EOperationStarted const& e);
     static void dispatchEvent(EventHandler* recipient, Event::EFileStarted const& e);
     static void dispatchEvent(EventHandler* recipient, Event::EProgress const& e);
     static void dispatchEvent(EventHandler* recipient, Event::EFileCompleted const& e);
-    static void dispatchEvent(EventHandler* recipient, Event::ECheckCompleted const& e);
-    static void dispatchEvent(EventHandler* recipient, Event::ECancelRequested const& e);
+    static void dispatchEvent(EventHandler* recipient, Event::EOperationCompleted const& e);
     static void dispatchEvent(EventHandler* recipient, Event::ECanceled const& e);
     static void dispatchEvent(EventHandler* recipient, Event::EError const& e);
 };
