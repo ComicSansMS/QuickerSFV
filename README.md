@@ -37,15 +37,15 @@ The goal is feature-parity with QuickSFV, so that QuickerSFV can act as a drop-i
 There are a few restrictions currently:
    
    - The "Previously Verified Database" feature of QuickSFV is not supported.
-   - Currently not the following file formats that QuickSFV supported are not supported in QuickerSFV:
+   - The following file formats that QuickSFV supported are not currently supported in QuickerSFV:
        - `.txt` This file extension is too ambiguous to meaningfully associate with a specific format.
        - `.ckz` I could not find a file specification for this format. If someone can supply me with an example file, I would consider adding support. It seems to be a legacy file format that is no longer in use.
        - `.csv` Same as `.txt`, it is unclear which format to associate with this extension.
        - `.par` Par seems to be a legacy format that is no longer in use. Support for `.par2` might be added with a plugin in the future.
-       - Backwards compatibility with WIN-SFV32 for `.sfv` files. WIN-SFV32 seems to be no longer in use.
+       - No backwards compatibility with WIN-SFV32 for `.sfv` files. WIN-SFV32 seems to be no longer in use.
    - The QuickSFV .ini configuration file is not supported. Placing .ini files in the working directory of the .exe file is no longer considered good practice for Windows applications. QuickerSFV allows saving its configuration in the Registry instead.
 
-If you find one of these restrictions unacceptable or you are missing feature or workflow from QuickSFV, feel free to [open an issue](https://github.com/ComicSansMS/QuickerSFV/issues).
+If you find one of these restrictions unacceptable or are missing a feature or workflow from QuickSFV, feel free to [open an issue](https://github.com/ComicSansMS/QuickerSFV/issues).
 
 Benchmarks
 ----------
