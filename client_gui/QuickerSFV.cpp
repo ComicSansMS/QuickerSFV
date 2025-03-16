@@ -267,6 +267,7 @@ private:
     std::vector<ListViewEntry const*> getSelectedListViewItems() const;
     void doCopySelectionToClipboard();
     void doMarkBadFiles();
+    std::vector<ListViewEntry const*> getMarkedFilesForDeletion();
     void doDeleteMarkedFiles();
 
     static TCHAR const* getStatusTextForStatus(ListViewEntry::Status s);
@@ -598,8 +599,13 @@ LRESULT MainWindow::populateListView(NMHDR* nmh) {
         header_rect = RECT{ .left = top_left.x, .top = top_left.y, .right = bottom_right.x, .bottom = bottom_right.y };
         InvalidateRect(m_hWnd, &header_rect, FALSE);
     } else if (nmh->code == NM_RCLICK) {
+        // context menu
         POINT mouse_cursor;
         if (!GetCursorPos(&mouse_cursor)) { return 0; }
+        EnableMenuItem(m_hPopupMenu, ID_CONTEXTMENU_COPY,
+            MF_BYCOMMAND | ((getSelectedListViewItems().empty()) ? MF_DISABLED : MF_ENABLED));
+        EnableMenuItem(m_hPopupMenu, ID_CONTEXTMENU_DELETEMARKEDFILES,
+            MF_BYCOMMAND | ((getMarkedFilesForDeletion().empty()) ? MF_DISABLED : MF_ENABLED));
         if (!TrackPopupMenu(GetSubMenu(m_hPopupMenu, 0), TPM_RIGHTBUTTON,
                             mouse_cursor.x, mouse_cursor.y, 0, m_hWnd, nullptr)) {
             return 0;
@@ -719,13 +725,18 @@ void MainWindow::doMarkBadFiles() {
     }
 }
 
-void MainWindow::doDeleteMarkedFiles() {
+std::vector<MainWindow::ListViewEntry const*> MainWindow::getMarkedFilesForDeletion() {
     std::vector<ListViewEntry const*> selected_items = getSelectedListViewItems();
     selected_items.erase(
         std::remove_if(begin(selected_items), end(selected_items), [](ListViewEntry const* e) {
                 return (e->status != ListViewEntry::Status::Ok) &&
-                    (e->status != ListViewEntry::Status::FailedMismatch);
+                       (e->status != ListViewEntry::Status::FailedMismatch);
             }), end(selected_items));
+    return selected_items;
+}
+
+void MainWindow::doDeleteMarkedFiles() {
+    std::vector<ListViewEntry const*> const selected_items = getMarkedFilesForDeletion();
     if (selected_items.empty()) { return; }
     int const answer = MessageBox(m_hWnd,
         toWcharStr(formatString(72, TEXT("%d file%s will be deleted from disk.\n\nAre you sure?"),
