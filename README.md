@@ -3,6 +3,8 @@
 
 QuickerSFV is an open-source rewrite of [QuickSFV](https://www.quicksfv.org/) for modern Windows systems.
 
+![Screenshot][2]
+
 Major Features
 --------------
    - 📈 Significantly faster checking times than QuickSFV, especially on SSDs
@@ -75,3 +77,4 @@ There are currently no plans to provide a graphical user interface for non-Windo
 
 
   [1]: https://github.com/ComicSansMS/QuickerSFV/blob/main/.github/images/quicker_sfv_logo.png
+  [2]: https://github.com/ComicSansMS/QuickerSFV/blob/main/.github/images/screenshot-01.png
