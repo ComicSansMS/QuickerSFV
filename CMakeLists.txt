@@ -38,7 +38,7 @@ else(MSVC)
 endif(MSVC)
 
 if(MSVC)
-    option(QUICKER_SFV_USE_BUNDLED_OPENSSL "Use the minimal bundled version of OpenSSL." OFF)
+    option(QUICKER_SFV_USE_BUNDLED_OPENSSL "Use the minimal bundled version of OpenSSL." ON)
 else()
     set(QUICKER_SFV_USE_BUNDLED_OPENSSL OFF)
 endif()
