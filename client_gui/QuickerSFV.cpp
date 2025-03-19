@@ -272,7 +272,7 @@ private:
     std::vector<ListViewEntry const*> getMarkedFilesForDeletion();
     void doDeleteMarkedFiles();
 
-    static TCHAR const* getStatusTextForStatus(ListViewEntry::Status s);
+    static TCHAR const* getStatusTextForStatus(ListViewEntry::Status s, std::u16string_view checksum);
 };
 
 MainWindow::MainWindow(FileProviders& file_providers, OperationScheduler& scheduler)
@@ -505,9 +505,21 @@ LRESULT MainWindow::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
-TCHAR const* MainWindow::getStatusTextForStatus(ListViewEntry::Status s) {
-    TCHAR const* status_texts[] = { TEXT("OK"), TEXT("FAILED. Checksum mismatch"), TEXT("FAILED. File does not exist"), TEXT("") };
-    return status_texts[std::min<int>(s, ARRAYSIZE(status_texts) - 1)];
+TCHAR const* MainWindow::getStatusTextForStatus(ListViewEntry::Status s, std::u16string_view checksum) {
+    switch (s) {
+    case ListViewEntry::Ok:
+        return TEXT("OK");
+    case ListViewEntry::FailedMismatch:
+        if (checksum.empty()) {
+            return TEXT("FAILED. Unable to read file");
+        } else {
+            return TEXT("FAILED. Checksum mismatch");
+        }
+    case ListViewEntry::FailedMissing:
+        return TEXT("FAILED. File does not exist");
+    default:
+        return TEXT("");
+    }
 }
 
 LRESULT MainWindow::populateListView(NMHDR* nmh) {
@@ -527,7 +539,7 @@ LRESULT MainWindow::populateListView(NMHDR* nmh) {
             } else if (disp_info->item.iSubItem == 2) {
                 // status
                 _tcsncpy_s(disp_info->item.pszText, disp_info->item.cchTextMax,
-                           getStatusTextForStatus(entry.status), _TRUNCATE);
+                           getStatusTextForStatus(entry.status, entry.checksum), _TRUNCATE);
             }
         } 
         if (disp_info->item.mask & LVIF_IMAGE) {
@@ -1048,7 +1060,7 @@ void MainWindow::writeResultsToFile() const {
         {
             msg = convertToUtf8(e.name) + u8": " +
                 convertToUtf8(e.checksum) + u8":  " +
-                convertToUtf8(assumeUtf16(getStatusTextForStatus(e.status)));
+                convertToUtf8(assumeUtf16(getStatusTextForStatus(e.status, e.checksum)));
         } else {
             msg = convertToUtf8(e.name);
         }

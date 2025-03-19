@@ -535,6 +535,7 @@ void OperationScheduler::doCreate(OperationState& op) {
         if (fin == INVALID_HANDLE_VALUE) {
             signalFileCompleted(op.event_handler, utf8_relative_path, Digest{}, utf8_absolute_path,
                                 EventHandler::CompletionStatus::Bad);
+            ++result.bad;
             continue;
         }
         HandleGuard guard_fin(fin);

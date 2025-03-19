@@ -243,7 +243,7 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
         return ret;
     }
 
-    ChecksumFile readFromFile(FileInput& file_input) const {
+    ChecksumFile readFromFile(FileInput& file_input) const override {
         ChecksumFile ret;
         struct ReadInput {
             PluginChecksumProvider const* provider;
