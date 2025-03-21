@@ -19,7 +19,7 @@
  */
 #include <quicker_sfv/quicker_sfv.hpp>
 
-#include <fast_crc32.hpp>
+#include <fast_crc32/fast_crc32.hpp>
 
 namespace quicker_sfv {
 

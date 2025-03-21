@@ -23,7 +23,7 @@
 #include <quicker_sfv/digest.hpp>
 #include <quicker_sfv/detail/string_conversion.hpp>
 
-#include <fast_crc32.hpp>
+#include <fast_crc32/fast_crc32.hpp>
 
 namespace quicker_sfv::detail {
 

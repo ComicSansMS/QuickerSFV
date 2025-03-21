@@ -373,3 +373,29 @@ if(BUILD_PLUGINS)
         target_link_libraries(quicker_sfv_rar PRIVATE quicker_sfv_plugin_sdk quicker_sfv)
     endif(BUILD_RAR_PLUGIN)
 endif()
+
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+    ${PROJECT_SOURCE_DIR}/cmake/quicker_sfvConfig.in
+    ${PROJECT_BINARY_DIR}/generated/cmake/quicker_sfvConfig.cmake
+    INSTALL_DESTINATION cmake
+    NO_SET_AND_CHECK_MACRO
+    NO_CHECK_REQUIRED_COMPONENTS_MACRO
+)
+install(TARGETS chromium-zlib quicker_sfv quicker_sfv_plugin_sdk
+    EXPORT quicker_sfv_export
+    LIBRARY DESTINATION lib/$<CONFIG>
+    ARCHIVE DESTINATION lib/$<CONFIG>
+    FILE_SET HEADERS
+)
+export(EXPORT quicker_sfv_export FILE ${PROJECT_BINARY_DIR}/cmake/quicker_sfvTargets.cmake NAMESPACE quicker_sfv::)
+export(PACKAGE quicker_sfv)
+install(EXPORT quicker_sfv_export
+    FILE quicker_sfvTargets.cmake
+    NAMESPACE quicker_sfv::
+    DESTINATION cmake
+)
+install(FILES
+    ${PROJECT_BINARY_DIR}/generated/cmake/quicker_sfvConfig.cmake
+    DESTINATION cmake
+)

@@ -12,7 +12,7 @@ target_sources(chromium-zlib
     FILE_SET HEADERS
     BASE_DIRS ${PROJECT_SOURCE_DIR}
     FILES
-    ${PROJECT_SOURCE_DIR}/fast_crc32.hpp
+    ${PROJECT_SOURCE_DIR}/fast_crc32/fast_crc32.hpp
 )
 target_compile_features(chromium-zlib PRIVATE cxx_std_20)
 set_source_files_properties(
