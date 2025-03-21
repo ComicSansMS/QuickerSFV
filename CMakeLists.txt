@@ -382,7 +382,7 @@ configure_package_config_file(
     NO_SET_AND_CHECK_MACRO
     NO_CHECK_REQUIRED_COMPONENTS_MACRO
 )
-install(TARGETS chromium-zlib quicker_sfv quicker_sfv_plugin_sdk
+install(TARGETS chromium-zlib openssl-crypto quicker_sfv quicker_sfv_plugin_sdk
     EXPORT quicker_sfv_export
     LIBRARY DESTINATION lib/$<CONFIG>
     ARCHIVE DESTINATION lib/$<CONFIG>

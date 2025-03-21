@@ -1,2 +1,6 @@
 @PACKAGE_INIT@
 
+include("${CMAKE_CURRENT_LIST_DIR}/quicker_sfvTargets.cmake")
+
+add_library(OpenSSL::Crypto ALIAS quicker_sfv::openssl-crypto)
+
