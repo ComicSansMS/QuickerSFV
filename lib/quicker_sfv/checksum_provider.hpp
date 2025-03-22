@@ -100,7 +100,10 @@ public:
      * @param[in] file_output A FileOutput object providing access to the file.
      * @param[in] f The ChecksumFile to be serialized.
      * @throws Exception Error::FileIO if an error occurs while writing the file.
-     *                   Error::PluginError If a plugin failure occurs.
+     *                   Error::PluginError if a plugin failure occurs.
+     *                   Error::Failed if the provider does not have the capabilities
+     *                   for writing ChecksumFile. This must be indicated by returning
+     *                   ProviderCapabilities::VerifyOnly from getCapabilities().
      */
     virtual void writeNewFile(FileOutput& file_output, ChecksumFile const& f) const = 0;
 };

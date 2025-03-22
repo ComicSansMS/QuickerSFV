@@ -140,7 +140,7 @@ target_sources(quicker_sfv
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/sfv_provider.cpp
     ${PROJECT_SOURCE_DIR}/lib/quicker_sfv/string_utilities.cpp
     ${PROJECT_BINARY_DIR}/generated/quicker_sfv/src/version.cpp
-    PRIVATE
+    PUBLIC
     FILE_SET detail_headers TYPE HEADERS
     BASE_DIRS ${PROJECT_SOURCE_DIR}/lib
     FILES
@@ -374,28 +374,31 @@ if(BUILD_PLUGINS)
     endif(BUILD_RAR_PLUGIN)
 endif()
 
-include(CMakePackageConfigHelpers)
-configure_package_config_file(
-    ${PROJECT_SOURCE_DIR}/cmake/quicker_sfvConfig.in
-    ${PROJECT_BINARY_DIR}/generated/cmake/quicker_sfvConfig.cmake
-    INSTALL_DESTINATION cmake
-    NO_SET_AND_CHECK_MACRO
-    NO_CHECK_REQUIRED_COMPONENTS_MACRO
-)
-install(TARGETS chromium-zlib openssl-crypto quicker_sfv quicker_sfv_plugin_sdk
-    EXPORT quicker_sfv_export
-    LIBRARY DESTINATION lib/$<CONFIG>
-    ARCHIVE DESTINATION lib/$<CONFIG>
-    FILE_SET HEADERS
-)
-export(EXPORT quicker_sfv_export FILE ${PROJECT_BINARY_DIR}/cmake/quicker_sfvTargets.cmake NAMESPACE quicker_sfv::)
-export(PACKAGE quicker_sfv)
-install(EXPORT quicker_sfv_export
-    FILE quicker_sfvTargets.cmake
-    NAMESPACE quicker_sfv::
-    DESTINATION cmake
-)
-install(FILES
-    ${PROJECT_BINARY_DIR}/generated/cmake/quicker_sfvConfig.cmake
-    DESTINATION cmake
-)
+if (QUICKER_SFV_USE_BUNDLED_OPENSSL)
+    include(CMakePackageConfigHelpers)
+    configure_package_config_file(
+        ${PROJECT_SOURCE_DIR}/cmake/quicker_sfvConfig.in
+        ${PROJECT_BINARY_DIR}/generated/cmake/quicker_sfvConfig.cmake
+        INSTALL_DESTINATION cmake
+        NO_SET_AND_CHECK_MACRO
+        NO_CHECK_REQUIRED_COMPONENTS_MACRO
+    )
+    install(TARGETS chromium-zlib openssl-crypto quicker_sfv quicker_sfv_plugin_sdk
+        EXPORT quicker_sfv_export
+        LIBRARY DESTINATION lib/$<CONFIG>
+        ARCHIVE DESTINATION lib/$<CONFIG>
+        FILE_SET HEADERS
+        FILE_SET detail_headers
+    )
+    export(EXPORT quicker_sfv_export FILE ${PROJECT_BINARY_DIR}/cmake/quicker_sfvTargets.cmake NAMESPACE quicker_sfv::)
+    export(PACKAGE quicker_sfv)
+    install(EXPORT quicker_sfv_export
+        FILE quicker_sfvTargets.cmake
+        NAMESPACE quicker_sfv::
+        DESTINATION cmake
+    )
+    install(FILES
+        ${PROJECT_BINARY_DIR}/generated/cmake/quicker_sfvConfig.cmake
+        DESTINATION cmake
+    )
+endif(QUICKER_SFV_USE_BUNDLED_OPENSSL)

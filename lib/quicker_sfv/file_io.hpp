@@ -35,11 +35,9 @@ class FileOutput {
 public:
     virtual ~FileOutput() = 0;
     /** Writes the supplied span of bytes to a file.
-     * @return On error, returns 0.
-               If successful, returns the number of bytes written to the file,
-               which has to be equal to the size of the input span.
+     * @throws Exception Error::FileIO on error.
      */
-    virtual size_t write(std::span<std::byte const> bytes_to_write) = 0;
+    virtual void write(std::span<std::byte const> bytes_to_write) = 0;
 };
 
 /** Interface for file input operations.
@@ -51,13 +49,13 @@ public:
     static constexpr size_t const RESULT_END_OF_FILE = std::numeric_limits<size_t>::max();
     virtual ~FileInput() = 0;
     /** Reads to the supplied span a number of bytes from the file equal to the size of the span.
-     * @return On error, returns 0.
+     * @return If successful, returns the number of bytes read from the file.
      *         If there is no additional input available because the end of file
      *         has been reached, returns RESULT_END_OF_FILE.
-     *         If successful, returns the number of bytes read from the file.
-     *         If this is less than the size of the input span, the end of file
-     *         has been reached and subsequent calls to read will return
+     *         If the returned value is less than the size of the input span, the
+     *         end of file has been reached and subsequent calls to read will return
      *         with RESULT_END_OF_FILE.
+     * @throws Exception Error::FileIO on error.
      */
     virtual size_t read(std::span<std::byte> read_buffer) = 0;
 
@@ -73,14 +71,14 @@ public:
      * The file pointer
      * @param offset The offset of the new file pointer position from seek_start.
      * @param seek_start Start position for the file pointer calculation.
-     * @return On success, returns the new value of the file read pointer.
-     *         On error, returns -1.
+     * @return The new value of the file read pointer.
+     * @throws Exception Error::FileIO on error.
      */
     virtual int64_t seek(int64_t offset, SeekStart seek_start) = 0;
 
     /** Retrieves the current value of the file read pointer.
      * @return On success, the current position of the file pointer in bytes.
-     *         On error, returns -1.
+     * @throws Exception Error::FileIO on error.
      */
     virtual int64_t tell() = 0;
 };

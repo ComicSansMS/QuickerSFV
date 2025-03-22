@@ -109,13 +109,12 @@ public:
         CloseHandle(m_fout);
     }
 
-    size_t write(std::span<std::byte const> bytes_to_write) override {
+    void write(std::span<std::byte const> bytes_to_write) override {
         if (bytes_to_write.size() >= std::numeric_limits<DWORD>::max()) { std::abort(); }
         DWORD bytes_written = 0;
         if (!WriteFile(m_fout, bytes_to_write.data(), static_cast<DWORD>(bytes_to_write.size()), &bytes_written, nullptr)) {
             throwException(Error::FileIO);
         }
-        return bytes_written;
     }
 };
 

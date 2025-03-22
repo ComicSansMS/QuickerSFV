@@ -341,14 +341,14 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
         } write_provider{ &file_output, &f, f.getEntries().begin(), {} };
         QuickerSFV_Result const res = pif->WriteNewFile(reinterpret_cast<QuickerSFV_FileWriteProviderP>(&write_provider),
             // write()
-            [](QuickerSFV_FileWriteProviderP write_provider, char const* buffer, size_t buffer_size, size_t* out_bytes_written) -> QuickerSFV_CallbackResult {
+            [](QuickerSFV_FileWriteProviderP write_provider, char const* buffer, size_t buffer_size) -> QuickerSFV_CallbackResult {
                 WriteProvider* wp = reinterpret_cast<WriteProvider*>(write_provider);
                 try {
-                    *out_bytes_written = wp->fout->write(std::span<std::byte const>(reinterpret_cast<std::byte const*>(buffer), buffer_size));
+                    wp->fout->write(std::span<std::byte const>(reinterpret_cast<std::byte const*>(buffer), buffer_size));
                 } catch (...) {
                     return QuickerSFV_CallbackResult_Failed;
                 }
-                return (*out_bytes_written != buffer_size) ? QuickerSFV_CallbackResult_Failed : QuickerSFV_CallbackResult_Ok;
+                return QuickerSFV_CallbackResult_Ok;
             },
             // next_entry()
             [](QuickerSFV_FileWriteProviderP write_provider, char const** out_filename, char const** out_digest) -> QuickerSFV_CallbackResult {

@@ -187,8 +187,7 @@ struct IQuickerSFV_ChecksumProvider_Vtbl {
         QuickerSFV_CallbackResult (*Write)(
             QuickerSFV_FileWriteProviderP write_provider,
             char const* in_buffer,
-            size_t in_buffer_size,
-            size_t* out_bytes_written
+            size_t in_buffer_size
         ),
         QuickerSFV_CallbackResult (*next_entry)(
             QuickerSFV_FileWriteProviderP write_provider,
@@ -276,8 +275,7 @@ struct IChecksumProvider {
         QuickerSFV_CallbackResult (*Write)(
             QuickerSFV_FileWriteProviderP write_provider,
             char const* in_buffer,
-            size_t in_buffer_size,
-            size_t* out_bytes_written
+            size_t in_buffer_size
         ),
         QuickerSFV_CallbackResult (*next_entry)(
             QuickerSFV_FileWriteProviderP write_provider,

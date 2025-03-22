@@ -20,6 +20,7 @@
 #ifndef INCLUDE_GUARD_QUICKER_SFV_TESTING_TEST_FILE_IO_HPP
 #define INCLUDE_GUARD_QUICKER_SFV_TESTING_TEST_FILE_IO_HPP
 
+#include <quicker_sfv/error.hpp>
 #include <quicker_sfv/file_io.hpp>
 
 #include <algorithm>
@@ -46,7 +47,7 @@ struct TestInput : public quicker_sfv::FileInput {
         if (bytes_available == 0) { return RESULT_END_OF_FILE; }
         size_t const bytes_to_read = std::min(bytes_available, read_buffer.size());
         if ((fault_after > 0) && (read_idx + bytes_to_read >= fault_after)) {
-            return 0;
+            quicker_sfv::throwException(quicker_sfv::Error::FileIO);
         }
         std::memcpy(read_buffer.data(), contents.data() + read_idx, bytes_to_read);
         read_idx += bytes_to_read;
@@ -62,7 +63,7 @@ struct TestInput : public quicker_sfv::FileInput {
         }
         int64_t const new_index = base_index + offset;
         if ((new_index < 0) || (new_index > static_cast<int64_t>(contents.size()))) {
-            return -1;
+            quicker_sfv::throwException(quicker_sfv::Error::FileIO);
         }
         read_idx = static_cast<size_t>(new_index);
         return new_index;
@@ -79,15 +80,14 @@ struct TestOutput : public quicker_sfv::FileOutput {
     size_t fault_after = 0;
     size_t write_calls = 0;
 
-    size_t write(std::span<std::byte const> bytes_to_write) override {
+    void write(std::span<std::byte const> bytes_to_write) override {
         ++write_calls;
         if ((fault_after > 0) && (write_idx + bytes_to_write.size() >= fault_after)) {
-            return 0;
+            quicker_sfv::throwException(quicker_sfv::Error::FileIO);
         }
         contents.resize(contents.size() + bytes_to_write.size());
         std::memcpy(contents.data() + contents.size() - bytes_to_write.size(), bytes_to_write.data(), bytes_to_write.size());
         write_idx += bytes_to_write.size();
-        return bytes_to_write.size();
     }
 };
 

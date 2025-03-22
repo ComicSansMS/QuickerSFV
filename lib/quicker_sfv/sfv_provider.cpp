@@ -87,11 +87,7 @@ void SfvProvider::writeNewFile(FileOutput& file_output, ChecksumFile const& f) c
         out_str.push_back(u8' ');
         out_str.append(e.digest.toString());
         out_str.push_back(u8'\n');
-        size_t const res =file_output.write(
-            std::span<std::byte const>(reinterpret_cast<std::byte const*>(out_str.data()), out_str.size()));
-        if (res == 0) {
-            throwException(Error::FileIO);
-        }
+        file_output.write(std::span<std::byte const>(reinterpret_cast<std::byte const*>(out_str.data()), out_str.size()));
     }
 }
 

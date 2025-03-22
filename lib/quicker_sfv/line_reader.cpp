@@ -44,7 +44,6 @@ bool LineReader::read_more() {
         return true;
     }
     m_fileOffset += bytes_read;
-    if (bytes_read == 0) { throwException(Error::FileIO); }
     if (bytes_read < READ_BUFFER_SIZE) {
         m_buffers.back.resize(bytes_read);
         m_eof = true;

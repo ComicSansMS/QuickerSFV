@@ -340,8 +340,7 @@ static QuickerSFV_Result QUICKER_SFV_PLUGIN_CALL IQuickerSFV_ChecksumProvider_Wr
         QuickerSFV_CallbackResult (*Write)(
             QuickerSFV_FileWriteProviderP write_provider,
             char const* in_buffer,
-            size_t in_buffer_size,
-            size_t* out_bytes_written
+            size_t in_buffer_size
         ),
         QuickerSFV_CallbackResult (*next_entry)(
             QuickerSFV_FileWriteProviderP write_provider,
@@ -359,7 +358,6 @@ static QuickerSFV_Result QUICKER_SFV_PLUGIN_CALL IQuickerSFV_ChecksumProvider_Wr
     while ((res = next_entry(write_provider, &filename, &digest)) == QuickerSFV_CallbackResult_MoreData) {
         size_t required_size = strlen(filename) + (SHA_DIGEST_LENGTH * 2) + 10;
         size_t bytes_formatted = 0;
-        size_t bytes_written = 0;
         if (write_buffer_size < required_size) {
             if (write_buffer) { free(write_buffer); }
             write_buffer = malloc(required_size * 2);
@@ -372,7 +370,7 @@ static QuickerSFV_Result QUICKER_SFV_PLUGIN_CALL IQuickerSFV_ChecksumProvider_Wr
         bytes_formatted = sprintf(write_buffer, "%s *%s\r\n", digest, filename);
 #endif
         if (bytes_formatted <= 0) { return QuickerSFV_Result_Failed; }
-        res = Write(write_provider, write_buffer, bytes_formatted, &bytes_written);
+        res = Write(write_provider, write_buffer, bytes_formatted);
         if (res != QuickerSFV_CallbackResult_Ok) { break; }
     }
     free(write_buffer);
