@@ -220,6 +220,12 @@ private:
      *                          hashing is part of.
      * @param[in] hasher Hasher to carry out the computation of the checksum.
      * @param[in] fin An opened Win32 file handle to the file that is to be hashed.
+     *                The handle must point to the start of the data portion that is
+     *                to be hashed.
+     * @param[in] data_offset The offset in bytes from the start of the file where
+     *                        the relevant data segment starts.
+     * @param[in] data_size The size of the data segments to read from the file for
+     *                      computing the hash in bytes.
      * @param[in] read_states Double-buffered structs containing the state for
      *                        carrying out the hashing. The sole reason this is
      *                        included here is to allow reusing the same state for
@@ -227,7 +233,8 @@ private:
      *                        performance optimisation.
      */
     HashResult hashFile(EventHandler* event_handler, Hasher& hasher,
-                        HANDLE fin, std::span<HashReadState, 2> read_states);
+                        HANDLE fin, int64_t data_offset, int64_t data_size,
+                        std::span<HashReadState, 2> read_states);
 
     /** @name Functions for posting events to the event queue.
      * These must only be called from the worker thread.

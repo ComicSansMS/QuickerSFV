@@ -30,14 +30,19 @@ namespace quicker_sfv {
 }
 
 void ChecksumFile::addEntry(std::u8string_view path, Digest digest) {
+    std::vector<DataPortion> d = { DataPortion{ .path = std::u8string{ path }, .data_offset = 0, .data_size = -1 } };
+    addEntry(std::move(digest), path, std::move(d));
+}
+
+void ChecksumFile::addEntry(Digest digest, std::u8string_view display, std::vector<DataPortion> data) {
     if (m_entries.size() >= 4'294'967'295) { throwException(Error::Failed); }
-    m_entries.emplace_back(std::u8string(path), std::move(digest));
+    m_entries.emplace_back(std::u8string{ display }, std::move(digest), std::move(data));
 }
 
 void ChecksumFile::sortEntries() {
     std::sort(begin(m_entries), end(m_entries),
         [](Entry const& lhs, Entry const& rhs) -> bool {
-            return lhs.path < rhs.path;
+            return lhs.display < rhs.display;
         });
 }
 

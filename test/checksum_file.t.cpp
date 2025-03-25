@@ -37,12 +37,24 @@ TEST_CASE("Checksum File")
         f.addEntry(u8"b", TestDigest{ u8"7890ab" });
         f.addEntry(u8"c", TestDigest{ u8"cdef01" });
         REQUIRE(f.getEntries().size() == 3);
-        CHECK(f.getEntries()[0].path == u8"a");
-        CHECK(f.getEntries()[1].path == u8"b");
-        CHECK(f.getEntries()[2].path == u8"c");
+        CHECK(f.getEntries()[0].display == u8"a");
+        CHECK(f.getEntries()[1].display == u8"b");
+        CHECK(f.getEntries()[2].display == u8"c");
         CHECK((f.getEntries()[0].digest == Digest{ TestDigest{ u8"123456" } }));
         CHECK((f.getEntries()[1].digest == Digest{ TestDigest{ u8"7890ab" } }));
         CHECK((f.getEntries()[2].digest == Digest{ TestDigest{ u8"cdef01" } }));
+        REQUIRE(f.getEntries()[0].data.size() == 1);
+        CHECK(f.getEntries()[0].data[0].path == f.getEntries()[0].display);
+        CHECK(f.getEntries()[0].data[0].data_offset == 0);
+        CHECK(f.getEntries()[0].data[0].data_size == -1);
+        REQUIRE(f.getEntries()[1].data.size() == 1);
+        CHECK(f.getEntries()[1].data[0].path == f.getEntries()[1].display);
+        CHECK(f.getEntries()[1].data[0].data_offset == 0);
+        CHECK(f.getEntries()[1].data[0].data_size == -1);
+        REQUIRE(f.getEntries()[2].data.size() == 1);
+        CHECK(f.getEntries()[2].data[0].path == f.getEntries()[2].display);
+        CHECK(f.getEntries()[2].data[0].data_offset == 0);
+        CHECK(f.getEntries()[2].data[0].data_size == -1);
     }
     SECTION("Sort and clear")
     {
@@ -52,13 +64,39 @@ TEST_CASE("Checksum File")
         f.addEntry(u8"a", TestDigest{ u8"123456" });
         f.sortEntries();
         REQUIRE(f.getEntries().size() == 3);
-        CHECK(f.getEntries()[0].path == u8"a");
-        CHECK(f.getEntries()[1].path == u8"b");
-        CHECK(f.getEntries()[2].path == u8"c");
+        CHECK(f.getEntries()[0].display == u8"a");
+        CHECK(f.getEntries()[1].display == u8"b");
+        CHECK(f.getEntries()[2].display == u8"c");
         CHECK((f.getEntries()[0].digest == Digest{ TestDigest{ u8"123456" } }));
         CHECK((f.getEntries()[1].digest == Digest{ TestDigest{ u8"7890ab" } }));
         CHECK((f.getEntries()[2].digest == Digest{ TestDigest{ u8"cdef01" } }));
         f.clear();
         CHECK(f.getEntries().empty());
+    }
+    SECTION("Extended add entry")
+    {
+        ChecksumFile f;
+
+        f.addEntry(TestDigest{ u8"7890ab" }, u8"display",
+            {
+                ChecksumFile::DataPortion{ u8"f1", 1, 100 },
+                ChecksumFile::DataPortion{ u8"f2", 55, 200 },
+                ChecksumFile::DataPortion{ u8"f3", 102, 333 },
+            });
+        REQUIRE(f.getEntries().size() == 1);
+        CHECK((f.getEntries()[0].digest == Digest{ TestDigest{ u8"7890ab" } }));
+        CHECK(f.getEntries()[0].display == u8"display");
+        REQUIRE(f.getEntries()[0].data.size() == 3);
+        CHECK(f.getEntries()[0].data[0].path == u8"f1");
+        CHECK(f.getEntries()[0].data[0].data_offset == 1);
+        CHECK(f.getEntries()[0].data[0].data_size == 100);
+
+        CHECK(f.getEntries()[0].data[1].path == u8"f2");
+        CHECK(f.getEntries()[0].data[1].data_offset == 55);
+        CHECK(f.getEntries()[0].data[1].data_size == 200);
+
+        CHECK(f.getEntries()[0].data[2].path == u8"f3");
+        CHECK(f.getEntries()[0].data[2].data_offset == 102);
+        CHECK(f.getEntries()[0].data[2].data_size == 333);
     }
 }

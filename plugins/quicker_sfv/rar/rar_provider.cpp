@@ -103,6 +103,19 @@ public:
         return m_upstream->tell();
     }
 
+
+    std::u8string_view current_file() const override {
+        return m_upstream->current_file();
+    }
+
+    bool open(std::u8string_view new_file) override {
+        return m_upstream->open(new_file);
+    }
+
+    uint64_t file_size() override {
+        return m_upstream->file_size();
+    }
+
     std::span<std::byte const> data() const {
         return m_data;
     }

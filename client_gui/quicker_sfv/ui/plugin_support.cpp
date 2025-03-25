@@ -332,7 +332,6 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
         return ret;
     }
     void writeNewFile(FileOutput& file_output, ChecksumFile const& f) const override {
-        auto sstr = f.getEntries().front().digest.toString();
         struct WriteProvider {
             FileOutput* fout;
             ChecksumFile const* checksum_file;
@@ -359,7 +358,11 @@ struct PluginChecksumProvider : public quicker_sfv::ChecksumProvider {
                         *out_digest = nullptr;
                         return QuickerSFV_CallbackResult_Ok;
                     }
-                    *out_filename = reinterpret_cast<char const*>(wp->it->path.c_str());
+                    if (wp->it->data.size() != 1) {
+                        // used single file next_entry on multi-file ChecksumFile
+                        return QuickerSFV_CallbackResult_Failed;
+                    }
+                    *out_filename = reinterpret_cast<char const*>(wp->it->data.front().path.c_str());
                     wp->digest_string = wp->it->digest.toString();
                     *out_digest = reinterpret_cast<char const*>(wp->digest_string.c_str());
                     ++wp->it;

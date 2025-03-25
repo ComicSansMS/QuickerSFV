@@ -82,8 +82,9 @@ ChecksumFile SfvProvider::readFromFile(FileInput& file_input) const {
 void SfvProvider::writeNewFile(FileOutput& file_output, ChecksumFile const& f) const {
     for (auto const& e : f.getEntries()) {
         std::u8string out_str;
-        out_str.reserve(e.path.size() + 11);
-        out_str.append(e.path);
+        auto const& path = e.data.front().path;
+        out_str.reserve(path.size() + 11);
+        out_str.append(path);
         out_str.push_back(u8' ');
         out_str.append(e.digest.toString());
         out_str.push_back(u8'\n');

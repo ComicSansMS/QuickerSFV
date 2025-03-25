@@ -38,12 +38,25 @@ namespace quicker_sfv {
  */
 class ChecksumFile {
 public:
+    /** A data portion is a continuous segment of data that contributes to a checksum.
+     * A checksum is computed from one or more data portions, potentially split
+     * across multiple files.
+     */
+    struct DataPortion {
+        std::u8string path;     ///< Path to the file that contains the data.
+        int64_t data_offset;    ///< Offset to the data from the start of the file.
+        int64_t data_size;      ///< Size of the data in bytes; If this is -1, the
+                                ///  entire remainder of the file starting from the
+                                ///  offset will be checked.
+    };
     /** An entry from a checksum file to be checked.
      * Each entry will appear as its own line in the list of checked files in the UI.
      */
     struct Entry {
-        std::u8string path;     ///< Path to the entity to be checked.
+        std::u8string display;  ///< String to be used for displaying the item in UI.
         Digest digest;          ///< Checksum digest for the entity to be checked.
+        std::vector<DataPortion> data;
+                                ///< All data contributing to the checksum digest.
     };
 private:
     std::vector<Entry> m_entries;
@@ -51,7 +64,8 @@ public:
     /** Retrieves all entries.
      */
     [[nodiscard]] std::span<const Entry> getEntries() const;
-    /** Add a new entry.
+
+    /** Adds a new entry.
      * New entries will be appended to the end of the list of entries.
      * @param[in] path Path of the entry.
      * @param[in] digest Checksum digest of the entry.
@@ -61,10 +75,31 @@ public:
      *                  maximum number of entries.
      */
     void addEntry(std::u8string_view path, Digest digest);
-    /** Sort all entries lexicographically by their paths.
+
+    /** Adds a new entry with extended information.
+     * Use of this function is required if file hashing does not just hash the
+     * entirety of a single file. In contrast to the simpler overload of addEntry()
+     * this function allows for the following:
+     *  - The displayed file name in the UI may be different from the file that is
+     *    opened on disk.
+     *  - The data portion may be smaller than the entirety of the file.
+     *  - More than one data portion, potentially from different files, may be used.
+     * @param[in] digest Checksum digest of the entry.
+     * @param[in] display String that will be printed for this entry in the UI.
+     * @param[in] data All data portions passed to the Hasher for computing the
+     *                 checksum digest.
+     *
+     * @note addEntry() will permit at maximum 2^32 entries.
+     * @throw Exception Error::Failed if the ChecksumFile already contains the
+     *                  maximum number of entries.
+     */
+    void addEntry(Digest digest, std::u8string_view display, std::vector<DataPortion> data);
+
+    /** Sorts all entries lexicographically by their paths.
      */
     void sortEntries();
-    /** Clear the checksum file, leaving it with no entries.
+
+    /** Clears the checksum file, leaving it with no entries.
      */
     void clear();
 };

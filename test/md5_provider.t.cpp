@@ -92,11 +92,11 @@ TEST_CASE("MD5 Provider")
             ChecksumFile const f = p->readFromFile(in);
             REQUIRE(f.getEntries().size() == 3);
             CHECK((f.getEntries()[0].digest == p->digestFromString(u8"14d739518e715e6e61c19eb05f58a8da")));
-            CHECK(f.getEntries()[0].path == u8"some/example/path");
+            CHECK(f.getEntries()[0].display == u8"some/example/path");
             CHECK((f.getEntries()[1].digest == p->digestFromString(u8"93b885adfe0da089cdf634904fd59f71")));
-            CHECK(f.getEntries()[1].path == u8"some_file.rar");
+            CHECK(f.getEntries()[1].display == u8"some_file.rar");
             CHECK((f.getEntries()[2].digest == p->digestFromString(u8"a6e25eeaf4af08b6baf6b2e31ceccfdb")));
-            CHECK(f.getEntries()[2].path == u8"another_file.txt");
+            CHECK(f.getEntries()[2].display == u8"another_file.txt");
         }
         SECTION("Windows Line Endings (CRLF)") {
             TestInput in;
@@ -107,11 +107,11 @@ TEST_CASE("MD5 Provider")
             ChecksumFile const f = p->readFromFile(in);
             REQUIRE(f.getEntries().size() == 3);
             CHECK((f.getEntries()[0].digest == p->digestFromString(u8"14d739518e715e6e61c19eb05f58a8da")));
-            CHECK(f.getEntries()[0].path == u8"some/example/path");
+            CHECK(f.getEntries()[0].display == u8"some/example/path");
             CHECK((f.getEntries()[1].digest == p->digestFromString(u8"93b885adfe0da089cdf634904fd59f71")));
-            CHECK(f.getEntries()[1].path == u8"some_file.rar");
+            CHECK(f.getEntries()[1].display == u8"some_file.rar");
             CHECK((f.getEntries()[2].digest == p->digestFromString(u8"a6e25eeaf4af08b6baf6b2e31ceccfdb")));
-            CHECK(f.getEntries()[2].path == u8"another_file.txt");
+            CHECK(f.getEntries()[2].display == u8"another_file.txt");
         }
         SECTION("Read error in file") {
             TestInput in;
@@ -168,7 +168,7 @@ TEST_CASE("MD5 Provider")
                 auto const f = p->readFromFile(in);
                 REQUIRE(f.getEntries().size() == 1);
                 CHECK((f.getEntries()[0].digest == p->digestFromString(u8"14d739518e715e6e61c19eb05f58a8da")));
-                CHECK(f.getEntries()[0].path == u8"some/example/path");
+                CHECK(f.getEntries()[0].display == u8"some/example/path");
             }
             SECTION("Trailing whitespace before separator") {
                 TestInput in;
@@ -176,7 +176,7 @@ TEST_CASE("MD5 Provider")
                 auto const f = p->readFromFile(in);
                 REQUIRE(f.getEntries().size() == 1);
                 CHECK((f.getEntries()[0].digest == p->digestFromString(u8"14d739518e715e6e61c19eb05f58a8da")));
-                CHECK(f.getEntries()[0].path == u8"some/example/path");
+                CHECK(f.getEntries()[0].display == u8"some/example/path");
             }
             SECTION("Missing final linebreak") {
                 TestInput in;
@@ -184,7 +184,7 @@ TEST_CASE("MD5 Provider")
                 auto const f = p->readFromFile(in);
                 REQUIRE(f.getEntries().size() == 1);
                 CHECK((f.getEntries()[0].digest == p->digestFromString(u8"14d739518e715e6e61c19eb05f58a8da")));
-                CHECK(f.getEntries()[0].path == u8"some/example/path");
+                CHECK(f.getEntries()[0].display == u8"some/example/path");
             }
             SECTION("Spaces in path") {
                 TestInput in;
@@ -194,11 +194,11 @@ TEST_CASE("MD5 Provider")
                 auto const f = p->readFromFile(in);
                 REQUIRE(f.getEntries().size() == 3);
                 CHECK((f.getEntries()[0].digest == p->digestFromString(u8"14d739518e715e6e61c19eb05f58a8da")));
-                CHECK(f.getEntries()[0].path == u8"some/example with spaces/path with spaces");
+                CHECK(f.getEntries()[0].display == u8"some/example with spaces/path with spaces");
                 CHECK((f.getEntries()[1].digest == p->digestFromString(u8"93b885adfe0da089cdf634904fd59f71")));
-                CHECK(f.getEntries()[1].path == u8"some_file.rar");
+                CHECK(f.getEntries()[1].display == u8"some_file.rar");
                 CHECK((f.getEntries()[2].digest == p->digestFromString(u8"a6e25eeaf4af08b6baf6b2e31ceccfdb")));
-                CHECK(f.getEntries()[2].path == u8"another_file.txt");
+                CHECK(f.getEntries()[2].display == u8"another_file.txt");
 
             }
         }

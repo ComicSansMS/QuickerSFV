@@ -39,10 +39,21 @@ class FileInputWin32 : public FileInput {
 private:
     HANDLE m_fin;
     bool m_eof;
+    std::u8string m_originalFullPath;
+    std::u8string m_currentFullPath;
+    std::u8string m_filename;
+    std::u8string m_basePath;
 public:
     FileInputWin32(std::u16string const& filename)
-        :m_eof(false)
+        :m_fin(INVALID_HANDLE_VALUE), m_eof(false), m_originalFullPath(convertToUtf8(filename))
     {
+        size_t const last_separator = m_originalFullPath.rfind('\\');
+        if ((last_separator == std::u8string::npos) || (last_separator >= m_originalFullPath.size() - 1)) {
+            throwException(Error::Failed);
+        }
+        m_currentFullPath = m_originalFullPath;
+        m_filename = m_originalFullPath.substr(last_separator + 1);
+        m_basePath = m_originalFullPath.substr(0, last_separator + 1);
         m_fin = CreateFile(toWcharStr(filename), GENERIC_READ, FILE_SHARE_READ, nullptr,
                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (m_fin == INVALID_HANDLE_VALUE) { quicker_sfv::throwException(Error::FileIO); }
@@ -88,6 +99,28 @@ public:
 
     int64_t tell() {
         return seek(0, SeekStart::CurrentPosition);
+    }
+
+    std::u8string_view current_file() const override {
+        return m_filename;
+    }
+
+    bool open(std::u8string_view new_file) override {
+        std::u8string new_fileu8 = std::u8string(new_file);
+        std::u8string new_file_full_path = m_basePath + new_fileu8;
+        HANDLE hf = CreateFile(toWcharStr(convertToUtf16(new_file_full_path)), GENERIC_READ, FILE_SHARE_READ, nullptr,
+            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (hf == INVALID_HANDLE_VALUE) { return false; }
+        CloseHandle(std::exchange(m_fin, hf));
+        m_currentFullPath = std::move(new_file_full_path);
+        m_filename = std::move(new_fileu8);
+        return true;
+    }
+
+    uint64_t file_size() override {
+        LARGE_INTEGER i;
+        if (!GetFileSizeEx(m_fin, &i)) { throwException(Error::FileIO); }
+        return i.QuadPart;
     }
 };
 
@@ -303,26 +336,20 @@ public:
 } // anonymous namespace
 
 OperationScheduler::HashResult OperationScheduler::hashFile(EventHandler* event_handler, Hasher& hasher,
-                                                            HANDLE fin, std::span<HashReadState, 2> read_states) {
+                                                            HANDLE fin, int64_t data_offset, int64_t data_size,
+                                                            std::span<HashReadState, 2> read_states) {
     auto const offsetLow = [](int64_t i) -> DWORD { return static_cast<DWORD>(i & 0xffffffffull); };
     auto const offsetHigh = [](int64_t i) -> DWORD { return static_cast<DWORD>((i >> 32ull) & 0xffffffffull); };
 
     SlidingWindow<std::chrono::nanoseconds, 10> bandwidth_track;
     hasher.reset();
 
-    int64_t read_offset = 0;
+    int64_t read_offset = data_offset;
+    int64_t bytes_read_pending = 0;
     int64_t bytes_hashed = 0;
     bool is_eof = false;
     bool is_canceled = false;
     bool is_error = false;
-    int64_t const file_size = [&is_error, fin]() -> int64_t {
-        LARGE_INTEGER l_file_size;
-        if (!GetFileSizeEx(fin, &l_file_size)) {
-            is_error = true;
-            return 0;
-        }
-        return l_file_size.QuadPart;
-    }();
 
     for (auto& rs : read_states) { rs.pending = false; }
     size_t front = 0;
@@ -333,7 +360,8 @@ OperationScheduler::HashResult OperationScheduler::hashFile(EventHandler* event_
         .hEvent = read_states[front].event
     };
     read_states[front].t = std::chrono::steady_clock::now();
-    if (!ReadFile(fin, read_states[front].buffer.data(), HASH_FILE_BUFFER_SIZE, nullptr, &read_states[front].overlapped)) {
+    DWORD bytes_to_read = static_cast<DWORD>(std::min(static_cast<int64_t>(HASH_FILE_BUFFER_SIZE), data_size - bytes_read_pending));
+    if (!ReadFile(fin, read_states[front].buffer.data(), bytes_to_read, nullptr, &read_states[front].overlapped)) {
         DWORD const err = GetLastError();
         if (err == ERROR_HANDLE_EOF) {
             // eof before async
@@ -345,7 +373,8 @@ OperationScheduler::HashResult OperationScheduler::hashFile(EventHandler* event_
             is_error = true;
         }
     }
-    read_offset += read_states[front].buffer.size();
+    bytes_read_pending += bytes_to_read;
+    read_offset += bytes_to_read;
     uint32_t last_progress = 0;
     while (!is_eof && !is_canceled && !is_error) {
         read_states[back].overlapped = OVERLAPPED{
@@ -354,6 +383,7 @@ OperationScheduler::HashResult OperationScheduler::hashFile(EventHandler* event_
                 .hEvent = read_states[back].event
         };
         read_states[back].t = std::chrono::steady_clock::now();
+        bytes_to_read = static_cast<DWORD>(std::min(static_cast<int64_t>(HASH_FILE_BUFFER_SIZE), data_size - bytes_read_pending));
         if (!ReadFile(fin, read_states[back].buffer.data(), HASH_FILE_BUFFER_SIZE, nullptr, &read_states[back].overlapped)) {
             DWORD const err = GetLastError();
             if (err == ERROR_HANDLE_EOF) {
@@ -367,7 +397,8 @@ OperationScheduler::HashResult OperationScheduler::hashFile(EventHandler* event_
                 break;
             }
         }
-        read_offset += read_states[front].buffer.size();
+        bytes_read_pending += bytes_to_read;
+        read_offset += bytes_to_read;
 
         DWORD bytes_read = 0;
         // cancel event has to go first, or it will get starved by completing i/os
@@ -400,7 +431,8 @@ OperationScheduler::HashResult OperationScheduler::hashFile(EventHandler* event_
 
         hasher.addData(std::span<std::byte const>(read_states[front].buffer.data(), bytes_read));
         bytes_hashed += bytes_read;
-        uint32_t current_progress = (file_size == 0) ? 0u : static_cast<uint32_t>(bytes_hashed * 100 / file_size);
+        if (bytes_hashed == data_size) { break; }
+        uint32_t current_progress = (data_size == 0) ? 0u : static_cast<uint32_t>(bytes_hashed * 100 / data_size);
         if (current_progress != last_progress) {
             int64_t const t_avg = bandwidth_track.rollingAverage().count();
             uint32_t const bandwidth_mib_s = static_cast<uint32_t>((t_avg) ? ((static_cast<int64_t>(HASH_FILE_BUFFER_SIZE) * 1'000'000'000ll) / (t_avg * 1'048'576ll)) : 0);
@@ -455,38 +487,47 @@ void OperationScheduler::doVerify(OperationState& op) {
     signalOperationStarted(op.event_handler, result.total);
 
     for (auto const& f : op.checksum_file.getEntries()) {
-        std::u16string const absolute_file_path = resolvePath(op.checksum_path, f.path);
+        std::u16string const absolute_file_path = resolvePath(op.checksum_path, f.data.front().path);
         std::u8string const utf8_absolute_file_path = convertToUtf8(absolute_file_path);
-        signalFileStarted(op.event_handler, f.path, utf8_absolute_file_path);
+        signalFileStarted(op.event_handler, f.display, utf8_absolute_file_path);
         HANDLE fin = CreateFile(toWcharStr(absolute_file_path), GENERIC_READ, FILE_SHARE_READ, nullptr,
                                 OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED, nullptr);
         if (fin == INVALID_HANDLE_VALUE) {
             if (GetLastError() == ERROR_FILE_NOT_FOUND) {
-                signalFileCompleted(op.event_handler, f.path, Digest{}, utf8_absolute_file_path,
+                signalFileCompleted(op.event_handler, f.display, Digest{}, utf8_absolute_file_path,
                                     EventHandler::CompletionStatus::Missing);
                 ++result.missing;
             } else {
-                signalFileCompleted(op.event_handler, f.path, Digest{}, utf8_absolute_file_path,
+                signalFileCompleted(op.event_handler, f.display, Digest{}, utf8_absolute_file_path,
                                     EventHandler::CompletionStatus::Bad);
                 ++result.bad;
             }
             continue;
         }
         HandleGuard guard_fin(fin);
-        HashResult const res = hashFile(op.event_handler, *op.hasher, fin, read_states);
+        int64_t file_size = f.data.front().data_size;
+        if (file_size == -1) {
+            LARGE_INTEGER l_file_size;
+            if (GetFileSizeEx(fin, &l_file_size)) {
+                file_size = l_file_size.QuadPart;
+            }
+        }
+        HashResult const res = (file_size != -1) ?
+            hashFile(op.event_handler, *op.hasher, fin, f.data.front().data_offset, file_size, read_states) :
+            HashResult::Error;
         if (res == HashResult::DigestReady) {
             auto digest = op.hasher->finalize();
             if (digest == f.digest) {
-                signalFileCompleted(op.event_handler, f.path, std::move(digest), utf8_absolute_file_path,
+                signalFileCompleted(op.event_handler, f.display, std::move(digest), utf8_absolute_file_path,
                                     EventHandler::CompletionStatus::Ok);
                 ++result.ok;
             } else {
-                signalFileCompleted(op.event_handler, f.path, std::move(digest), utf8_absolute_file_path,
+                signalFileCompleted(op.event_handler, f.display, std::move(digest), utf8_absolute_file_path,
                                     EventHandler::CompletionStatus::Bad);
                 ++result.bad;
             }
         } else if (res == HashResult::Error) {
-            signalFileCompleted(op.event_handler, f.path, Digest{}, utf8_absolute_file_path,
+            signalFileCompleted(op.event_handler, f.display, Digest{}, utf8_absolute_file_path,
                                 EventHandler::CompletionStatus::Bad);
             return;
         } else if (res == HashResult::Canceled) {
@@ -538,7 +579,10 @@ void OperationScheduler::doCreate(OperationState& op) {
             continue;
         }
         HandleGuard guard_fin(fin);
-        HashResult const res = hashFile(op.event_handler, *op.hasher, fin, read_states);
+        LARGE_INTEGER l_file_size;
+        HashResult const res = (GetFileSizeEx(fin, &l_file_size)) ?
+            hashFile(op.event_handler, *op.hasher, fin, 0, l_file_size.QuadPart, read_states) :
+            HashResult::Error;
         if (res == HashResult::DigestReady) {
             Digest d = op.hasher->finalize();
             signalFileCompleted(op.event_handler, utf8_relative_path, d, utf8_absolute_path,

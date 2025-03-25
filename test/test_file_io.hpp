@@ -35,6 +35,7 @@ struct TestInput : public quicker_sfv::FileInput {
     size_t read_idx = 0;
     size_t fault_after = 0;
     size_t read_calls = 0;
+    std::u8string file_name = u8"testfile.bin";
 
     TestInput& operator=(std::string_view t) {
         contents.assign(t.begin(), t.end());
@@ -71,6 +72,20 @@ struct TestInput : public quicker_sfv::FileInput {
 
     int64_t tell() override {
         return read_idx;
+    }
+
+    std::u8string_view current_file() const override {
+        return file_name;
+    }
+
+    bool open(std::u8string_view new_file) override {
+        file_name = new_file;
+        read_idx = 0;
+        return true;
+    }
+
+    uint64_t file_size() override {
+        return contents.size();
     }
 };
 

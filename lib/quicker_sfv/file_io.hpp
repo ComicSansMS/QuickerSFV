@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <limits>
 #include <span>
+#include <string_view>
 
 namespace quicker_sfv {
 
@@ -81,6 +82,25 @@ public:
      * @throws Exception Error::FileIO on error.
      */
     virtual int64_t tell() = 0;
+
+    /** Retrieves the file name of the currently opened file.
+     * This returns just the file name with extension, not the full path to the file.
+     */
+    virtual std::u8string_view current_file() const = 0;
+
+    /** Opens a new file for reading.
+     * @param[in] new_file File name of the file that is to be opened. The file path
+     *                     is interpreted relative to the folder of the originally
+     *                     opened file.
+     * @return If successful, returns true and the new file is available for reading.
+     *         On error, returns false and the original file remains opened.
+     */
+    virtual bool open(std::u8string_view new_file) = 0;
+
+    /** Retrieves the size of the current file in bytes.
+     * @throws Exception Error::FileIO on error.
+     */
+    virtual uint64_t file_size() = 0;
 };
 
 }

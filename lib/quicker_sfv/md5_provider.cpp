@@ -90,10 +90,11 @@ ChecksumFile MD5Provider::readFromFile(FileInput& file_input) const {
 void MD5Provider::writeNewFile(FileOutput& file_output, ChecksumFile const& f) const {
     for (auto const& e : f.getEntries()) {
         std::u8string out_str;
-        out_str.reserve(e.path.size() + 36);
+        auto const& path = e.data.front().path;
+        out_str.reserve(path.size() + 36);
         out_str.append(e.digest.toString());
         out_str.append(u8" *");
-        out_str.append(e.path);
+        out_str.append(path);
         out_str.push_back(u8'\n');
         file_output.write(std::span<std::byte const>(reinterpret_cast<std::byte const*>(out_str.data()), out_str.size()));
     }
